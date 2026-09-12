@@ -516,6 +516,78 @@
     body.printing-report #printReportContent, body.printing-report #printReportContent *{visibility:visible;}
     body.printing-report #printReportContent{position:absolute;left:0;top:0;width:100%;padding:20px;font-size:12px;}
   }
+
+  /* Buying: suppliers, payables, ordering */
+  .pay-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;}
+  .pay-tile{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:11px 12px;min-width:0;
+  }
+  .pay-tile .k{font-size:11px;color:var(--text-muted);font-weight:700;letter-spacing:.02em;}
+  .pay-tile .v{font-size:19px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums;}
+  .pay-tile.warn .v{color:#B3261E;}
+  .pay-tile.ok .v{color:var(--primary-dark);}
+  .sup-row{
+    border-bottom:1px solid var(--border);padding:12px 0;
+  }
+  .sup-row:last-child{border-bottom:none;}
+  .sup-row .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+  .sup-row .nm{font-size:14px;font-weight:800;min-width:0;overflow-wrap:anywhere;}
+  .sup-row .bal{font-size:15px;font-weight:800;flex:none;font-variant-numeric:tabular-nums;}
+  .sup-row .meta{font-size:12px;color:var(--text-muted);margin-top:3px;line-height:1.5;}
+  .limit-bar{height:6px;border-radius:99px;background:var(--border);margin-top:8px;overflow:hidden;}
+  .limit-bar span{display:block;height:100%;background:var(--primary);border-radius:99px;}
+  .limit-bar.over span{background:#B3261E;}
+  .limit-bar.near span{background:#B4690E;}
+  .sup-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .sup-actions button{
+    padding:7px 12px;border-radius:8px;border:1px solid var(--border);
+    background:var(--surface);font-size:12px;font-weight:700;cursor:pointer;
+    color:var(--text);font-family:"Manrope",sans-serif;
+  }
+  .over-limit-banner{
+    background:#FCEEEC;color:#7A1C15;border-radius:10px;border-left:3px solid #B3261E;
+    padding:11px 13px;font-size:12px;line-height:1.55;margin-bottom:14px;
+  }
+  .over-limit-banner b{display:block;margin-bottom:3px;}
+  .due-row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;}
+  .due-row:last-child{border-bottom:none;}
+  .due-row .who{min-width:0;overflow-wrap:anywhere;}
+  .due-row .when{font-size:11px;color:var(--text-muted);margin-top:2px;}
+  .due-row .amt{flex:none;font-weight:800;font-variant-numeric:tabular-nums;}
+  .due-row.late .amt{color:#B3261E;}
+  .buy-row{
+    display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--border);align-items:flex-start;
+  }
+  .buy-row:last-child{border-bottom:none;}
+  .buy-row .rank{
+    flex:none;width:22px;height:22px;border-radius:6px;background:var(--primary-tint);
+    color:var(--primary-dark);font-size:11px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;margin-top:2px;
+  }
+  .buy-row .body{flex:1;min-width:0;}
+  .buy-row .nm{font-size:13px;font-weight:700;overflow-wrap:anywhere;}
+  .buy-row .meta{font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.5;}
+  .buy-row .qty{flex:none;text-align:right;}
+  .buy-row .qty .n{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;}
+  .buy-row .qty .c{font-size:11px;color:var(--text-muted);font-variant-numeric:tabular-nums;}
+  .buy-row.skipped{opacity:.5;}
+  .flag{
+    display:inline-block;font-size:10px;font-weight:800;padding:2px 6px;border-radius:5px;
+    margin-right:5px;margin-top:4px;letter-spacing:.02em;
+  }
+  .flag.urgent{background:#FCEEEC;color:#7A1C15;}
+  .flag.loss{background:#FCEEEC;color:#7A1C15;}
+  .flag.slow{background:#FBF1E0;color:#7A4E0C;}
+  .flag.dead{background:var(--border);color:var(--text-muted);}
+  .dl-line{display:flex;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;}
+  .dl-line:last-of-type{border-bottom:none;}
+  .dl-line .n{flex:1;min-width:0;overflow-wrap:anywhere;}
+  .dl-line .q{flex:none;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums;}
+  .dl-line button{
+    flex:none;border:none;background:none;color:#B3261E;font-size:16px;cursor:pointer;padding:0 2px;
+  }
+  .cost-change{font-size:11px;color:var(--text-muted);margin-top:2px;}
 </style>
 </head>
 <body>
@@ -659,6 +731,58 @@
   </section>
 
   <!-- REPORTS VIEW (BIR books, invoicing, tax) -->
+  <section class="view" id="view-buying">
+    <div class="scope-note">
+      <b>How this decides what to order</b>
+      Every suggestion below starts from what actually sold — the last 7 days weighted against the last 28 — then asks how many days of stock you hold, how long your supplier takes, and how much profit each peso spent brings back per day. Fast-selling, high-margin goods are funded first. It never counts money you owe suppliers this week as money you can spend.
+    </div>
+
+    <div id="overLimitBanner"></div>
+
+    <div class="section-label" style="margin-top:0;">What you owe suppliers</div>
+    <div class="pay-summary" id="paySummary"></div>
+
+    <div class="report-card">
+      <div class="section-label" style="margin-top:0;">Due in the next 7 days</div>
+      <div id="dueSoonList"></div>
+    </div>
+
+    <div class="section-label">Suppliers</div>
+    <div class="report-card">
+      <div id="supplierList"></div>
+      <button class="btn btn-secondary" id="addSupplierBtn" style="margin-top:12px;">Add supplier</button>
+    </div>
+
+    <div class="section-label">What to order</div>
+    <div class="report-card">
+      <div class="field">
+        <label>Cash you can spend on stock right now</label>
+        <input type="number" id="buyBudgetInput" inputmode="decimal" placeholder="e.g. 20000">
+      </div>
+      <div class="biz-summary-line" id="budgetNote" style="margin-bottom:12px;"></div>
+      <div class="field">
+        <label>Show</label>
+        <select id="buyFilterSelect">
+          <option value="due">Only what needs ordering</option>
+          <option value="all">Every product with sales</option>
+        </select>
+      </div>
+      <div id="orderPlanList"></div>
+      <button class="btn btn-secondary" id="exportOrderPlanBtn" style="margin-top:12px;">Download order list (CSV)</button>
+    </div>
+
+    <div class="section-label">Cash stuck on your shelves</div>
+    <div class="report-card">
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 12px;">Stock that isn't moving is money you've already spent and can't use. These are the lines worth marking down, returning, or simply not reordering.</p>
+      <div id="deadStockList"></div>
+    </div>
+
+    <div class="section-label">Delivery history</div>
+    <div class="report-card">
+      <div id="purchaseHistory"></div>
+    </div>
+  </section>
+
   <section class="view" id="view-reports">
     <div class="scope-note">
       <b>What this can and can't do</b>
@@ -907,6 +1031,9 @@
   <button class="tab-btn" data-view="sales">
     <span class="icon">🧾</span><span class="lbl">Sales</span>
   </button>
+  <button class="tab-btn" data-view="buying">
+    <span class="icon">🚚</span><span class="lbl">Buying</span>
+  </button>
   <button class="tab-btn" data-view="reports">
     <span class="icon">📚</span><span class="lbl">Reports</span>
   </button>
@@ -1047,6 +1174,11 @@
         <label>Low stock alert at</label>
         <input type="number" id="pf-threshold" inputmode="numeric" placeholder="5">
       </div>
+    </div>
+    <div class="field" id="pf-supplierField">
+      <label>Supplier (optional)</label>
+      <select id="pf-supplier"></select>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Setting this lets the Buying tab use that supplier's delivery time and visit cycle when working out how much to order.</p>
     </div>
     <div class="field">
       <label>Barcode (optional)</label>
@@ -1286,6 +1418,150 @@
     <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:-4px 0 4px;">Customers can order by the piece online, so a basket can come to very little. This is the smallest total you'll accept — the storefront won't let anyone check out below it. Leave blank or 0 for no minimum.</p>
     <div class="btn-row">
       <button class="btn btn-primary" id="saveDesignBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="supplierSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2 id="supplierSheetTitle">Add supplier</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <div class="field">
+      <label>Supplier name</label>
+      <input type="text" id="sup-name" placeholder="e.g. Iloilo Grocery Distributors">
+    </div>
+    <div class="field">
+      <label>Contact (optional)</label>
+      <input type="text" id="sup-contact" placeholder="Salesman name or phone number">
+    </div>
+    <div class="field">
+      <label>Payment terms</label>
+      <select id="sup-terms">
+        <option value="credit">Credit — pay a set number of days after delivery</option>
+        <option value="consignment">Consignment — pay only for what sells</option>
+        <option value="cod">Cash on delivery</option>
+      </select>
+    </div>
+    <div class="field-row" id="sup-creditRow">
+      <div class="field">
+        <label>Days to pay</label>
+        <input type="number" id="sup-creditDays" inputmode="numeric" placeholder="e.g. 15">
+      </div>
+      <div class="field">
+        <label>Credit limit (₱)</label>
+        <input type="number" id="sup-creditLimit" inputmode="decimal" placeholder="e.g. 30000">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Days from order to delivery</label>
+        <input type="number" id="sup-leadTime" inputmode="numeric" placeholder="3">
+      </div>
+      <div class="field">
+        <label>How often they come (days)</label>
+        <input type="number" id="sup-cycle" inputmode="numeric" placeholder="7">
+      </div>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:0 0 4px;">Those last two decide how much to order: enough to last until the next delivery lands, plus a cushion. A salesman who calls every Tuesday and delivers the same day is 0 and 7.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveSupplierBtn">Save supplier</button>
+    </div>
+    <button class="btn btn-danger" id="deleteSupplierBtn" style="margin-top:10px;display:none;">Delete supplier</button>
+  </div>
+</div>
+
+<div class="sheet" id="deliverySheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2>Record a delivery</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <div class="field">
+      <label>Supplier</label>
+      <select id="dl-supplier"></select>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Delivery date</label>
+        <input type="date" id="dl-date">
+      </div>
+      <div class="field">
+        <label>Invoice / DR number</label>
+        <input type="text" id="dl-ref" placeholder="Optional">
+      </div>
+    </div>
+
+    <div class="section-label" style="margin-top:4px;">Items received</div>
+    <div class="field">
+      <label>Product</label>
+      <select id="dl-product"></select>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Quantity (packs)</label>
+        <input type="number" id="dl-qty" inputmode="decimal" placeholder="e.g. 12">
+      </div>
+      <div class="field">
+        <label>Cost per pack (₱)</label>
+        <input type="number" id="dl-unitCost" inputmode="decimal" placeholder="e.g. 58.50">
+      </div>
+    </div>
+    <button class="btn btn-secondary" id="dl-addLineBtn">Add to this delivery</button>
+    <div id="dl-lines" style="margin-top:12px;"></div>
+    <div class="summary-row total"><span>Delivery total</span><span id="dl-total">₱0.00</span></div>
+
+    <label style="display:flex;align-items:flex-start;gap:9px;padding:12px 0;font-size:13px;">
+      <input type="checkbox" id="dl-updateCost" checked style="width:auto;margin-top:2px;">
+      <span>Update my cost prices from this delivery<br><span style="font-size:11px;color:var(--text-muted);">Blends the new cost with what you already hold, in proportion to the quantities. Your margin reports then show what you really paid.</span></span>
+    </label>
+
+    <div id="dl-termsNote" class="biz-summary-line" style="margin-bottom:12px;"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveDeliveryBtn">Record delivery</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="paymentSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2>Record a payment</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <div class="field">
+      <label>Supplier</label>
+      <select id="pay-supplier"></select>
+    </div>
+    <div class="biz-summary-line" id="pay-balanceNote" style="margin-bottom:12px;"></div>
+    <div class="field">
+      <label>Apply to</label>
+      <select id="pay-purchase"></select>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Amount (₱)</label>
+        <input type="number" id="pay-amount" inputmode="decimal" placeholder="0.00">
+      </div>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="pay-date">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Method</label>
+        <select id="pay-method">
+          <option value="cash">Cash</option>
+          <option value="gcash">GCash</option>
+          <option value="bank">Bank transfer</option>
+          <option value="cheque">Cheque</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Reference</label>
+        <input type="text" id="pay-ref" placeholder="Optional">
+      </div>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:0 0 4px;">Payments can't be edited or deleted once recorded. To correct a mistake, record an offsetting entry — the same way sales work.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="savePaymentBtn">Record payment</button>
     </div>
   </div>
 </div>
@@ -1903,16 +2179,17 @@
     { key: "delivery", label: "Delivery areas & costing",  hint: "Towns, fees, per-km costs, minimum orders" },
     { key: "bir",      label: "BIR reports & invoices",    hint: "Tax estimates, books of accounts, invoice numbering" },
     { key: "margins",  label: "Costs & profit margins",    hint: "Base cost, markup, margin reporting" },
-    { key: "staff",    label: "Staff & manager accounts",  hint: "Separate logins per cashier" }
+    { key: "staff",    label: "Staff & manager accounts",  hint: "Separate logins per cashier" },
+    { key: "buying",   label: "Suppliers & ordering",      hint: "What you owe suppliers, and what to reorder" }
   ];
 
   // Sensible starting points. A shop can still switch anything afterwards.
   const BIZ_PROFILES = {
-    sarisari: ["tingi","barcode","printer","online","delivery","bir","margins","staff"],
-    pharmacy: ["barcode","printer","bir","margins","staff"],
-    hardware: ["tingi","barcode","printer","online","delivery","bir","margins","staff"],
-    food:     ["printer","online","delivery","bir","margins","staff"],
-    retail:   ["barcode","printer","online","bir","margins","staff"]
+    sarisari: ["tingi","barcode","printer","online","delivery","bir","margins","staff","buying"],
+    pharmacy: ["barcode","printer","bir","margins","staff","buying"],
+    hardware: ["tingi","barcode","printer","online","delivery","bir","margins","staff","buying"],
+    food:     ["printer","online","delivery","bir","margins","staff","buying"],
+    retail:   ["barcode","printer","online","bir","margins","staff","buying"]
   };
 
   function featureOn(key){
@@ -1973,6 +2250,7 @@
   function applyFeatureUI(){
     const map = {
       "orders": "online",
+      "buying": "buying",
       "reports": null
     };
     Object.keys(map).forEach(view => {
@@ -2838,6 +3116,7 @@
       updateCostSecurityStatus();
       updateThumbStatus();
       renderMarginReport();
+      renderBuyingView();
     }, (err) => { console.error(err); showToast("Couldn't load products"); }));
 
     listenerUnsubs.push(db.collection("settings").doc("business").onSnapshot((doc) => {
@@ -2864,6 +3143,7 @@
       renderDashboard();
       renderMarginReport();
       renderZoneEconomics();
+      renderBuyingView();
     }, (err) => { console.error(err); showToast("Couldn't load sales"); }));
 
     managerListenerUnsubs.push(db.collection("settings").doc("targets").onSnapshot((doc) => {
@@ -2911,11 +3191,27 @@
 
     // Cost figures live apart from the public product list, so margins are
     // only ever computed on the owner's device.
+    ownerListenerUnsubs.push(db.collection("suppliers").onSnapshot((snap) => {
+      suppliers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderBuyingView();
+    }, (err) => { console.error(err); }));
+
+    ownerListenerUnsubs.push(db.collection("purchases").orderBy("date", "desc").limit(400).onSnapshot((snap) => {
+      purchases = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderBuyingView();
+    }, (err) => { console.error(err); }));
+
+    ownerListenerUnsubs.push(db.collection("supplierPayments").orderBy("date", "desc").limit(400).onSnapshot((snap) => {
+      supplierPayments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderBuyingView();
+    }, (err) => { console.error(err); }));
+
     ownerListenerUnsubs.push(db.collection("productCosts").onSnapshot((snap) => {
       productCosts = {};
       snap.docs.forEach(d => { productCosts[d.id] = d.data(); });
       renderMarginReport();
       renderInventory();
+      renderBuyingView();
     }, (err) => { console.error(err); }));
   }
 
@@ -2927,7 +3223,7 @@
 
   // ---------- Staff & manager accounts (roles + per-cashier accountability) ----------
   const ROLE_TABS = {
-    owner: ["sell","inventory","orders","sales","reports"],
+    owner: ["sell","inventory","buying","orders","sales","reports"],
     manager: ["sell","sales"],
     staff: ["sell"]
   };
@@ -2978,7 +3274,7 @@
     const roleTag = currentUserRole === "owner" ? "" : currentUserRole === "manager" ? " (manager)" : " (staff)";
     if(nameEl) nameEl.textContent = "Signed in as " + currentUserName + roleTag;
     const allowedTabs = ROLE_TABS[currentUserRole] || ROLE_TABS.staff;
-    ["sell","inventory","orders","sales","reports"].forEach(v => {
+    ["sell","inventory","buying","orders","sales","reports"].forEach(v => {
       const btn = document.querySelector('.tab-btn[data-view="' + v + '"]');
       if(btn) btn.style.display = allowedTabs.includes(v) ? "" : "none";
     });
@@ -3839,6 +4135,12 @@
     $("pf-price").value = p ? p.price : "";
     $("pf-stock").value = p ? formatStock(p.stock) : "";
     $("pf-category").value = p ? (p.category || "") : "";
+    const supSel = $("pf-supplier");
+    if(supSel){
+      supSel.innerHTML = `<option value="">No supplier set</option>` +
+        suppliers.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join("");
+      supSel.value = p && p.supplierId ? p.supplierId : "";
+    }
     $("pf-threshold").value = p ? (p.threshold != null ? p.threshold : 5) : 5;
     $("pf-barcode").value = p ? (p.barcode || "") : "";
     // Cost/markup figures live in the owner-only productCosts record, not on
@@ -3923,6 +4225,7 @@
     const data = {
       name, localName: localName || null,
       price, stock, category, threshold: isNaN(threshold) ? 5 : threshold,
+      supplierId: ($("pf-supplier") && $("pf-supplier").value) || null,
       image: currentImageData || null,
       thumb: currentThumbData || null,
       imageCredit: currentImageCredit || null,
@@ -4991,6 +5294,777 @@
     $("addProductFab").style.display = view === "inventory" ? "flex" : "none";
     if(view === "sell") renderCartBar();
     if(view === "reports") renderReportsView();
+    if(view === "buying") renderBuyingView();
+  }
+
+  // ---------- Suppliers, payables and ordering ----------
+  //
+  // The whole point of this section is cash. A small shop rarely fails because
+  // it sold too little; it fails because its money is sitting on a shelf as
+  // slow stock while a supplier's due date arrives. So everything here is
+  // measured in two currencies: pesos owed, and pesos tied up.
+  //
+  // Owner-only, both in the interface and in the Firestore rules.
+
+  let suppliers = [];
+  let purchases = [];
+  let supplierPayments = [];
+  let deliveryLines = [];
+  let editingSupplierId = null;
+
+  const DEFAULT_LEAD_DAYS = 3;
+  const DEFAULT_CYCLE_DAYS = 7;
+  const OVERSTOCK_DAYS = 60;   // beyond this, stock is money asleep
+  const DEAD_DAYS = 45;        // no sale in this long with stock on hand
+
+  function supplierById(id){ return suppliers.find(s => s.id === id) || null; }
+  function todayISO(){ return new Date().toISOString().slice(0, 10); }
+  function daysAgo(n){ const d = new Date(); d.setDate(d.getDate() - n); return d; }
+  function addDays(dateStr, n){
+    const d = new Date(dateStr + "T00:00:00");
+    d.setDate(d.getDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  function daysBetween(aISO, bISO){
+    return Math.round((new Date(bISO + "T00:00:00") - new Date(aISO + "T00:00:00")) / 86400000);
+  }
+
+  // ---- Demand ----------------------------------------------------------
+  // Everything is counted in PACKS, the same unit stock is held in, so a tingi
+  // sale of 3 sticks from a 20-stick pack counts as 0.15 packs. Velocity and
+  // stock therefore share a unit and "days of cover" means what it says.
+  function packsSoldSince(productId, fromDate){
+    let total = 0;
+    for(const s of sales){
+      if(!s.timestamp) continue;
+      if(new Date(s.timestamp) < fromDate) continue;
+      for(const it of (s.items || [])){
+        if(it.productId !== productId) continue;
+        const perPack = it.unit === "sub" ? (it.perPack || 1) : 1;
+        total += (Number(it.qty) || 0) / perPack;
+      }
+    }
+    return total;
+  }
+
+  function lastSoldDaysAgo(productId){
+    let newest = null;
+    for(const s of sales){
+      if(!s.timestamp) continue;
+      if(!(s.items || []).some(it => it.productId === productId)) continue;
+      const t = new Date(s.timestamp);
+      if(!newest || t > newest) newest = t;
+    }
+    if(!newest) return null;
+    return Math.floor((Date.now() - newest.getTime()) / 86400000);
+  }
+
+  // What a pack ACTUALLY earns, from the mix it really sold in.
+  //
+  // The product's own price field is the whole-pack price, but a tingi line is
+  // mostly sold by the piece — and selling by the piece is what earns the
+  // premium. Valuing such a product at its pack price understates it badly and
+  // would push the very lines that pay best to the bottom of the order list.
+  // So revenue and packs are both taken from real sales and divided.
+  function realisedRevenuePerPack(p){
+    const from = daysAgo(28);
+    let rev = 0, packs = 0;
+    for(const s of sales){
+      if(!s.timestamp || new Date(s.timestamp) < from) continue;
+      for(const it of (s.items || [])){
+        if(it.productId !== p.id) continue;
+        const perPack = it.unit === "sub" ? (it.perPack || 1) : 1;
+        const qty = Number(it.qty) || 0;
+        rev += (Number(it.price) || 0) * qty;
+        packs += qty / perPack;
+      }
+    }
+    if(packs <= 0) return Number(p.price) || 0;
+    return rev / packs;
+  }
+
+  // Blended so a real change in the last week shows up quickly, without one
+  // unusual day dominating. If there is no 28-day history yet, the 7-day rate
+  // stands on its own.
+  function velocityFor(productId){
+    const v7 = packsSoldSince(productId, daysAgo(7)) / 7;
+    const v28 = packsSoldSince(productId, daysAgo(28)) / 28;
+    if(v28 <= 0) return v7;
+    return 0.6 * v7 + 0.4 * v28;
+  }
+
+  // ---- What a delivery still owes -------------------------------------
+  // Credit and cash terms owe the full amount from the day of delivery.
+  // Consignment owes only for what has actually sold since it arrived — so the
+  // balance grows as the goods move, which is the whole attraction of the
+  // arrangement and the reason it can't be treated as a fixed bill.
+  function consignmentEarned(pur){
+    let earned = 0;
+    const from = new Date(pur.date + "T00:00:00");
+    for(const it of (pur.items || [])){
+      const sold = Math.min(Number(it.qty) || 0, packsSoldSince(it.productId, from));
+      earned += sold * (Number(it.unitCost) || 0);
+    }
+    return earned;
+  }
+  function purchaseBilled(pur){
+    return pur.consignment ? consignmentEarned(pur) : (Number(pur.total) || 0);
+  }
+  function purchaseOutstanding(pur){
+    return Math.max(0, purchaseBilled(pur) - (Number(pur.paidAmount) || 0));
+  }
+  function supplierBalance(supplierId){
+    return purchases
+      .filter(p => p.supplierId === supplierId)
+      .reduce((sum, p) => sum + purchaseOutstanding(p), 0);
+  }
+  function purchaseDueISO(pur){
+    if(pur.consignment) return null;
+    return pur.dueDate || null;
+  }
+  function isOverdue(pur){
+    const due = purchaseDueISO(pur);
+    return !!due && purchaseOutstanding(pur) > 0.005 && due < todayISO();
+  }
+
+  // ---- Payables summary ------------------------------------------------
+  function renderPayables(){
+    const wrap = $("paySummary");
+    if(!wrap) return;
+
+    const open = purchases.filter(p => purchaseOutstanding(p) > 0.005);
+    const totalOwed = open.reduce((s, p) => s + purchaseOutstanding(p), 0);
+    const overdue = open.filter(isOverdue).reduce((s, p) => s + purchaseOutstanding(p), 0);
+    const soon = open.filter(p => {
+      const due = purchaseDueISO(p);
+      if(!due) return false;
+      const d = daysBetween(todayISO(), due);
+      return d >= 0 && d <= 7;
+    }).reduce((s, p) => s + purchaseOutstanding(p), 0);
+    const consign = open.filter(p => p.consignment).reduce((s, p) => s + purchaseOutstanding(p), 0);
+
+    wrap.innerHTML = `
+      <div class="pay-tile"><div class="k">Owed in total</div><div class="v">${peso(totalOwed)}</div></div>
+      <div class="pay-tile ${overdue > 0 ? "warn" : "ok"}"><div class="k">Overdue</div><div class="v">${peso(overdue)}</div></div>
+      <div class="pay-tile"><div class="k">Due within 7 days</div><div class="v">${peso(soon)}</div></div>
+      <div class="pay-tile"><div class="k">Consignment sold</div><div class="v">${peso(consign)}</div></div>
+    `;
+
+    // Over-limit warning. It warns; it never blocks. A delivery standing at
+    // your door does not wait for a ledger to agree with it.
+    const breached = suppliers.filter(s => {
+      const lim = Number(s.creditLimit) || 0;
+      return lim > 0 && supplierBalance(s.id) > lim;
+    });
+    const banner = $("overLimitBanner");
+    if(banner){
+      banner.innerHTML = breached.length === 0 ? "" : `
+        <div class="over-limit-banner">
+          <b>${breached.length === 1 ? "One supplier is over their credit limit" : breached.length + " suppliers are over their credit limit"}</b>
+          ${breached.map(s => `${escapeHtml(s.name)} — owed ${peso(supplierBalance(s.id))} against a ${peso(s.creditLimit)} limit`).join("<br>")}
+          <br><br>You can still record deliveries. But a supplier who stops your credit mid-week costs more than the discount you were chasing.
+        </div>`;
+    }
+
+    // Due in the next 7 days, overdue first.
+    const dueList = $("dueSoonList");
+    if(dueList){
+      const rows = open
+        .filter(p => {
+          const due = purchaseDueISO(p);
+          if(!due) return false;
+          return daysBetween(todayISO(), due) <= 7;
+        })
+        .sort((a, b) => (purchaseDueISO(a) || "").localeCompare(purchaseDueISO(b) || ""));
+      if(rows.length === 0){
+        dueList.innerHTML = `<div style="font-size:13px;color:var(--text-muted);">Nothing falls due in the next seven days.</div>`;
+      } else {
+        dueList.innerHTML = rows.map(p => {
+          const due = purchaseDueISO(p);
+          const d = daysBetween(todayISO(), due);
+          const when = d < 0 ? `${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"} overdue`
+                    : d === 0 ? "Due today"
+                    : `Due in ${d} day${d === 1 ? "" : "s"}`;
+          return `<div class="due-row ${d < 0 ? "late" : ""}">
+            <div class="who"><div>${escapeHtml(p.supplierName || "Supplier")}</div>
+            <div class="when">${when}${p.ref ? " · " + escapeHtml(p.ref) : ""}</div></div>
+            <div class="amt">${peso(purchaseOutstanding(p))}</div>
+          </div>`;
+        }).join("");
+      }
+    }
+  }
+
+  function renderSupplierList(){
+    const el = $("supplierList");
+    if(!el) return;
+    if(suppliers.length === 0){
+      el.innerHTML = `<div style="font-size:13px;color:var(--text-muted);">No suppliers yet. Add one to start tracking what you owe and how long their deliveries take.</div>`;
+      return;
+    }
+    el.innerHTML = suppliers.map(s => {
+      const bal = supplierBalance(s.id);
+      const lim = Number(s.creditLimit) || 0;
+      const pct = lim > 0 ? Math.min(100, (bal / lim) * 100) : 0;
+      const cls = lim > 0 ? (bal > lim ? "over" : pct >= 80 ? "near" : "") : "";
+      const terms = s.terms === "consignment" ? "Consignment — pay for what sells"
+                  : s.terms === "cod" ? "Cash on delivery"
+                  : `${Number(s.creditDays) || 0} days to pay`;
+      const lead = Number(s.leadTimeDays) || DEFAULT_LEAD_DAYS;
+      const cyc = Number(s.orderCycleDays) || DEFAULT_CYCLE_DAYS;
+      return `<div class="sup-row">
+        <div class="top">
+          <div class="nm">${escapeHtml(s.name)}</div>
+          <div class="bal" style="${bal > 0 && lim > 0 && bal > lim ? "color:#B3261E;" : ""}">${peso(bal)}</div>
+        </div>
+        <div class="meta">${terms}${lim > 0 ? " · limit " + peso(lim) : ""}<br>Delivers in ${lead} day${lead === 1 ? "" : "s"}, calls every ${cyc} day${cyc === 1 ? "" : "s"}${s.contact ? " · " + escapeHtml(s.contact) : ""}</div>
+        ${lim > 0 ? `<div class="limit-bar ${cls}"><span style="width:${pct}%;"></span></div>` : ""}
+        <div class="sup-actions">
+          <button data-sup-delivery="${s.id}">Record delivery</button>
+          <button data-sup-payment="${s.id}">Record payment</button>
+          <button data-sup-edit="${s.id}">Edit</button>
+        </div>
+      </div>`;
+    }).join("");
+
+    el.querySelectorAll("[data-sup-edit]").forEach(b => b.onclick = () => openSupplierSheet(b.dataset.supEdit));
+    el.querySelectorAll("[data-sup-delivery]").forEach(b => b.onclick = () => openDeliverySheet(b.dataset.supDelivery));
+    el.querySelectorAll("[data-sup-payment]").forEach(b => b.onclick = () => openPaymentSheet(b.dataset.supPayment));
+  }
+
+  // ---- The ordering plan ----------------------------------------------
+  // For each product: how fast it sells, how long cover lasts, how much to buy
+  // to reach the next delivery with a cushion, and — the part that decides the
+  // ranking — how much profit each peso spent returns per day.
+  function orderPlanFor(p){
+    const sup = p.supplierId ? supplierById(p.supplierId) : null;
+    const lead = sup && Number(sup.leadTimeDays) > 0 ? Number(sup.leadTimeDays) : DEFAULT_LEAD_DAYS;
+    const cycle = sup && Number(sup.orderCycleDays) > 0 ? Number(sup.orderCycleDays) : DEFAULT_CYCLE_DAYS;
+    const safety = Math.max(2, lead * 0.5);
+    const v = velocityFor(p.id);
+    const stock = Number(p.stock) || 0;
+    const cover = v > 0 ? stock / v : (stock > 0 ? Infinity : 0);
+    const reorderPoint = v * (lead + safety);
+    const target = v * (lead + cycle + safety);
+    const suggest = Math.max(0, Math.ceil(target - stock));
+    const m = productMargin(p);
+    // Profit is taken AFTER operating cost, because a line can look healthy on
+    // gross margin and still lose money once the cost of selling it is counted.
+    // Revenue is what the pack really earned in the mix it sold in, not its
+    // shelf price — see realisedRevenuePerPack.
+    const realised = realisedRevenuePerPack(p);
+    const perUnit = m ? (netOfTax(realised) - m.cost - (m.opCost || 0)) : null;
+    const profitPerDay = perUnit != null ? perUnit * v : null;
+    const cashNeeded = m ? m.cost * suggest : null;
+    const roc = (profitPerDay != null && cashNeeded > 0) ? profitPerDay / cashNeeded : null;
+    const losing = !!(m && m.afterOp < 0);
+    return { p, sup, lead, cycle, safety, v, stock, cover, reorderPoint, target, suggest, m, perUnit, profitPerDay, cashNeeded, roc, losing };
+  }
+
+  // Money already promised to suppliers this week is not money available for
+  // new stock, so it comes off the budget before anything is allocated.
+  function committedNext7Days(){
+    return purchases
+      .filter(p => purchaseOutstanding(p) > 0.005)
+      .filter(p => {
+        const due = purchaseDueISO(p);
+        return !!due && daysBetween(todayISO(), due) <= 7;
+      })
+      .reduce((s, p) => s + purchaseOutstanding(p), 0);
+  }
+
+  function renderOrderPlan(){
+    const el = $("orderPlanList");
+    if(!el) return;
+
+    const budgetRaw = parseFloat($("buyBudgetInput").value);
+    const budget = isNaN(budgetRaw) ? null : budgetRaw;
+    const committed = committedNext7Days();
+    const safeToSpend = budget == null ? null : Math.max(0, budget - committed);
+
+    const note = $("budgetNote");
+    if(note){
+      if(budget == null){
+        note.innerHTML = `Enter what you can spend and the list below will be funded in order, best return first. ${committed > 0 ? "<b>" + peso(committed) + "</b> is already promised to suppliers in the next 7 days." : ""}`;
+      } else {
+        note.innerHTML = `<b>${peso(safeToSpend)}</b> safe to spend on stock — ${peso(budget)} on hand less ${peso(committed)} owed to suppliers within 7 days.`;
+      }
+    }
+
+    const showAll = $("buyFilterSelect").value === "all";
+    let plans = products.map(orderPlanFor).filter(pl => pl.v > 0 || pl.stock > 0);
+    plans = plans.filter(pl => showAll ? pl.v > 0 : pl.suggest > 0 && pl.cover <= pl.lead + pl.safety);
+
+    // Rank by return on cash: pesos of profit per day for each peso tied up.
+    // A product with no cost recorded can't be ranked, so it sorts last with a
+    // note rather than being silently dropped.
+    plans.sort((a, b) => {
+      if(a.roc == null && b.roc == null) return b.v - a.v;
+      if(a.roc == null) return 1;
+      if(b.roc == null) return -1;
+      return b.roc - a.roc;
+    });
+
+    if(plans.length === 0){
+      el.innerHTML = `<div style="font-size:13px;color:var(--text-muted);">${showAll ? "No product has recorded sales yet — the plan appears once the POS has some history to read." : "Nothing needs ordering. Every line has enough cover to reach its next delivery."}</div>`;
+      lastOrderPlan = [];
+      return;
+    }
+
+    let spent = 0;
+    let rank = 0;
+    const html = plans.map(pl => {
+      const cost = pl.cashNeeded;
+      let funded = true;
+      let skipReason = "";
+      if(pl.losing){ funded = false; skipReason = "Losing money at this price — fix the price before buying more"; }
+      else if(safeToSpend != null && cost != null && spent + cost > safeToSpend){ funded = false; skipReason = "Beyond this week's budget"; }
+      if(funded && cost != null) spent += cost;
+      if(funded) rank++;
+      pl.funded = funded;
+
+      const coverTxt = pl.cover === Infinity ? "no sales yet" : `${pl.cover.toFixed(1)} days left`;
+      const flags = [];
+      if(pl.cover < pl.lead) flags.push(`<span class="flag urgent">Runs out before delivery</span>`);
+      if(pl.losing) flags.push(`<span class="flag loss">Losing money</span>`);
+      if(pl.m == null) flags.push(`<span class="flag slow">No cost recorded</span>`);
+
+      return `<div class="buy-row ${funded ? "" : "skipped"}">
+        <div class="rank">${funded ? rank : "—"}</div>
+        <div class="body">
+          <div class="nm">${escapeHtml(pl.p.name)}</div>
+          <div class="meta">
+            ${formatStock(pl.stock)} in stock · sells ${pl.v.toFixed(2)}/day · ${coverTxt}${pl.sup ? " · " + escapeHtml(pl.sup.name) : ""}
+            ${pl.roc != null ? `<br>Earns ${peso(pl.profitPerDay)}/day · ${(pl.roc * 100).toFixed(1)}% return per day on the cash` : ""}
+            ${skipReason ? `<br><b>${escapeHtml(skipReason)}</b>` : ""}
+          </div>
+          ${flags.join("")}
+        </div>
+        <div class="qty">
+          <div class="n">${pl.suggest}</div>
+          <div class="c">${cost != null ? peso(cost) : "cost ?"}</div>
+        </div>
+      </div>`;
+    }).join("");
+
+    const fundedPlans = plans.filter(pl => pl.funded);
+    const totalCost = fundedPlans.reduce((s, pl) => s + (pl.cashNeeded || 0), 0);
+    const totalProfit = fundedPlans.reduce((s, pl) => s + (pl.profitPerDay || 0), 0);
+
+    el.innerHTML = html + `
+      <div class="summary-row total" style="margin-top:10px;"><span>Order this round</span><span>${peso(totalCost)}</span></div>
+      <div class="report-row"><span>Profit it should earn</span><span>${peso(totalProfit)} a day</span></div>`;
+
+    lastOrderPlan = plans;
+  }
+  let lastOrderPlan = [];
+
+  function renderDeadStock(){
+    const el = $("deadStockList");
+    if(!el) return;
+    const rows = [];
+    products.forEach(p => {
+      const stock = Number(p.stock) || 0;
+      if(stock <= 0) return;
+      const v = velocityFor(p.id);
+      const m = productMargin(p);
+      const tied = m ? m.cost * stock : null;
+      const last = lastSoldDaysAgo(p.id);
+      if(v <= 0 && (last == null || last >= DEAD_DAYS)){
+        rows.push({ p, stock, tied, kind: "dead", last });
+      } else if(v > 0 && stock / v > OVERSTOCK_DAYS){
+        rows.push({ p, stock, tied, kind: "slow", cover: stock / v });
+      }
+    });
+    if(rows.length === 0){
+      el.innerHTML = `<div style="font-size:13px;color:var(--text-muted);">Nothing is sitting still. Every line with stock is moving at a reasonable rate.</div>`;
+      return;
+    }
+    rows.sort((a, b) => (b.tied || 0) - (a.tied || 0));
+    const total = rows.reduce((s, r) => s + (r.tied || 0), 0);
+    el.innerHTML = rows.map(r => `
+      <div class="buy-row">
+        <div class="body">
+          <div class="nm">${escapeHtml(r.p.name)}</div>
+          <div class="meta">${formatStock(r.stock)} in stock · ${r.kind === "dead"
+            ? (r.last == null ? "never sold" : `last sold ${r.last} days ago`)
+            : `${Math.round(r.cover)} days of cover at the current rate`}</div>
+          <span class="flag ${r.kind === "dead" ? "dead" : "slow"}">${r.kind === "dead" ? "Not moving" : "Overstocked"}</span>
+        </div>
+        <div class="qty"><div class="n" style="font-size:14px;">${r.tied != null ? peso(r.tied) : "—"}</div><div class="c">tied up</div></div>
+      </div>`).join("") + `
+      <div class="summary-row total" style="margin-top:10px;"><span>Cash not working</span><span>${peso(total)}</span></div>`;
+  }
+
+  function renderPurchaseHistory(){
+    const el = $("purchaseHistory");
+    if(!el) return;
+    if(purchases.length === 0){
+      el.innerHTML = `<div style="font-size:13px;color:var(--text-muted);">No deliveries recorded yet.</div>`;
+      return;
+    }
+    const recent = purchases.slice().sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 25);
+    el.innerHTML = recent.map(p => {
+      const out = purchaseOutstanding(p);
+      const billed = purchaseBilled(p);
+      const status = out <= 0.005 ? "Settled" : (p.consignment ? `${peso(out)} owed on what's sold` : `${peso(out)} unpaid`);
+      return `<div class="due-row ${isOverdue(p) ? "late" : ""}">
+        <div class="who"><div>${escapeHtml(p.supplierName || "Supplier")}${p.consignment ? " · consignment" : ""}</div>
+        <div class="when">${escapeHtml(p.date || "")} · ${(p.items || []).length} item${(p.items || []).length === 1 ? "" : "s"}${p.ref ? " · " + escapeHtml(p.ref) : ""} · ${status}</div></div>
+        <div class="amt">${peso(p.consignment ? billed : (Number(p.total) || 0))}</div>
+      </div>`;
+    }).join("");
+  }
+
+  function renderBuyingView(){
+    if(currentUserRole !== "owner") return;
+    renderPayables();
+    renderSupplierList();
+    renderOrderPlan();
+    renderDeadStock();
+    renderPurchaseHistory();
+  }
+
+  // ---- Supplier form ---------------------------------------------------
+  function openSupplierSheet(id){
+    editingSupplierId = id || null;
+    const s = id ? supplierById(id) : null;
+    $("supplierSheetTitle").textContent = s ? "Edit supplier" : "Add supplier";
+    $("sup-name").value = s ? (s.name || "") : "";
+    $("sup-contact").value = s ? (s.contact || "") : "";
+    $("sup-terms").value = s ? (s.terms || "credit") : "credit";
+    $("sup-creditDays").value = s && s.creditDays != null ? s.creditDays : "";
+    $("sup-creditLimit").value = s && s.creditLimit != null ? s.creditLimit : "";
+    $("sup-leadTime").value = s && s.leadTimeDays != null ? s.leadTimeDays : "";
+    $("sup-cycle").value = s && s.orderCycleDays != null ? s.orderCycleDays : "";
+    $("deleteSupplierBtn").style.display = s ? "" : "none";
+    updateSupplierTermsUI();
+    openSheet("supplierSheet");
+  }
+  function updateSupplierTermsUI(){
+    const t = $("sup-terms").value;
+    $("sup-creditRow").style.display = t === "credit" ? "" : "none";
+  }
+  async function saveSupplier(){
+    const name = $("sup-name").value.trim();
+    if(!name){ showToast("Enter a supplier name"); return; }
+    const terms = $("sup-terms").value;
+    const data = {
+      name,
+      contact: $("sup-contact").value.trim() || null,
+      terms,
+      creditDays: terms === "credit" ? (parseInt($("sup-creditDays").value, 10) || 0) : null,
+      creditLimit: terms === "credit" ? (parseFloat($("sup-creditLimit").value) || 0) : 0,
+      leadTimeDays: parseInt($("sup-leadTime").value, 10) || DEFAULT_LEAD_DAYS,
+      orderCycleDays: parseInt($("sup-cycle").value, 10) || DEFAULT_CYCLE_DAYS,
+      active: true
+    };
+    try{
+      if(editingSupplierId) await db.collection("suppliers").doc(editingSupplierId).set(data, { merge: true });
+      else await db.collection("suppliers").add(data);
+      closeSheet("supplierSheet");
+      showToast("Supplier saved");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't save supplier");
+    }
+  }
+  async function deleteSupplier(){
+    if(!editingSupplierId) return;
+    const bal = supplierBalance(editingSupplierId);
+    if(bal > 0.005){ showToast("Settle the " + peso(bal) + " balance first"); return; }
+    if(!confirm("Delete this supplier? Past deliveries stay in the record.")) return;
+    try{
+      await db.collection("suppliers").doc(editingSupplierId).delete();
+      closeSheet("supplierSheet");
+      showToast("Supplier deleted");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't delete supplier");
+    }
+  }
+
+  // ---- Recording a delivery -------------------------------------------
+  function fillSupplierSelect(sel, chosen){
+    sel.innerHTML = suppliers.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join("");
+    if(chosen) sel.value = chosen;
+  }
+  function fillProductSelect(sel){
+    sel.innerHTML = products
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
+  }
+  function openDeliverySheet(supplierId){
+    if(suppliers.length === 0){ showToast("Add a supplier first"); return; }
+    if(products.length === 0){ showToast("Add a product first"); return; }
+    deliveryLines = [];
+    fillSupplierSelect($("dl-supplier"), supplierId);
+    fillProductSelect($("dl-product"));
+    $("dl-date").value = todayISO();
+    $("dl-ref").value = "";
+    $("dl-qty").value = "";
+    $("dl-unitCost").value = "";
+    $("dl-updateCost").checked = true;
+    renderDeliveryLines();
+    updateDeliveryTermsNote();
+    openSheet("deliverySheet");
+  }
+  function updateDeliveryTermsNote(){
+    const s = supplierById($("dl-supplier").value);
+    const el = $("dl-termsNote");
+    if(!s || !el) return;
+    if(s.terms === "consignment"){
+      el.innerHTML = "<b>Consignment.</b> Nothing is owed on delivery. The balance grows as these items sell, and is recalculated from your sales each time you open this tab.";
+    } else if(s.terms === "cod"){
+      el.innerHTML = "<b>Cash on delivery.</b> This will be recorded as paid in full straight away.";
+    } else {
+      const days = Number(s.creditDays) || 0;
+      const due = addDays($("dl-date").value || todayISO(), days);
+      el.innerHTML = `<b>Due ${due}</b> — ${days} day${days === 1 ? "" : "s"} from delivery.`;
+    }
+  }
+  function addDeliveryLine(){
+    const pid = $("dl-product").value;
+    const qty = parseFloat($("dl-qty").value);
+    const unitCost = parseFloat($("dl-unitCost").value);
+    const p = products.find(x => x.id === pid);
+    if(!p){ showToast("Choose a product"); return; }
+    if(isNaN(qty) || qty <= 0){ showToast("Enter a quantity"); return; }
+    if(isNaN(unitCost) || unitCost < 0){ showToast("Enter the cost per pack"); return; }
+    deliveryLines.push({ productId: pid, name: p.name, qty, unitCost });
+    $("dl-qty").value = "";
+    $("dl-unitCost").value = "";
+    renderDeliveryLines();
+  }
+  function renderDeliveryLines(){
+    const el = $("dl-lines");
+    if(!el) return;
+    if(deliveryLines.length === 0){
+      el.innerHTML = `<div style="font-size:12px;color:var(--text-muted);">No items added yet.</div>`;
+    } else {
+      el.innerHTML = deliveryLines.map((l, i) => {
+        const p = products.find(x => x.id === l.productId);
+        const old = p ? productMargin(p) : null;
+        const oldCost = old ? old.cost : null;
+        const oldStock = p ? (Number(p.stock) || 0) : 0;
+        let costNote = "";
+        if($("dl-updateCost").checked){
+          const blended = oldCost != null && oldStock > 0
+            ? (oldStock * oldCost + l.qty * l.unitCost) / (oldStock + l.qty)
+            : l.unitCost;
+          costNote = oldCost != null
+            ? `<div class="cost-change">Cost ${peso(oldCost)} → ${peso(blended)}</div>`
+            : `<div class="cost-change">Cost will be set to ${peso(l.unitCost)}</div>`;
+        }
+        return `<div class="dl-line">
+          <div class="n">${escapeHtml(l.name)}${costNote}</div>
+          <div class="q">${formatStock(l.qty)} × ${peso(l.unitCost)}</div>
+          <button data-dl-remove="${i}" aria-label="Remove">✕</button>
+        </div>`;
+      }).join("");
+      el.querySelectorAll("[data-dl-remove]").forEach(b => b.onclick = () => {
+        deliveryLines.splice(parseInt(b.dataset.dlRemove, 10), 1);
+        renderDeliveryLines();
+      });
+    }
+    const total = deliveryLines.reduce((s, l) => s + l.qty * l.unitCost, 0);
+    $("dl-total").textContent = peso(total);
+  }
+
+  async function saveDelivery(){
+    const s = supplierById($("dl-supplier").value);
+    if(!s){ showToast("Choose a supplier"); return; }
+    if(deliveryLines.length === 0){ showToast("Add at least one item"); return; }
+    const date = $("dl-date").value || todayISO();
+    const total = deliveryLines.reduce((sum, l) => sum + l.qty * l.unitCost, 0);
+    const consignment = s.terms === "consignment";
+    const cod = s.terms === "cod";
+    const updateCost = $("dl-updateCost").checked;
+
+    const pur = {
+      supplierId: s.id,
+      supplierName: s.name,
+      date,
+      ref: $("dl-ref").value.trim() || null,
+      terms: s.terms || "credit",
+      consignment,
+      dueDate: consignment ? null : (cod ? date : addDays(date, Number(s.creditDays) || 0)),
+      items: deliveryLines.map(l => ({ productId: l.productId, name: l.name, qty: l.qty, unitCost: l.unitCost })),
+      total,
+      paidAmount: cod ? total : 0,
+      status: cod ? "paid" : "unpaid",
+      createdAt: new Date().toISOString(),
+      byUid: (auth.currentUser && auth.currentUser.uid) || null
+    };
+
+    // A warning, not a wall — the goods are already at the door.
+    const lim = Number(s.creditLimit) || 0;
+    if(!consignment && !cod && lim > 0 && supplierBalance(s.id) + total > lim){
+      const after = supplierBalance(s.id) + total;
+      if(!confirm(`This takes ${s.name} to ${peso(after)}, over their ${peso(lim)} limit.\n\nRecord it anyway?`)) return;
+    }
+
+    try{
+      const batch = db.batch();
+      batch.set(db.collection("purchases").doc(), pur);
+      // Stock rises by what arrived. Several lines for the same product are
+      // added together so one increment covers them all.
+      const deltas = {};
+      deliveryLines.forEach(l => { deltas[l.productId] = (deltas[l.productId] || 0) + l.qty; });
+      Object.keys(deltas).forEach(pid => {
+        batch.update(db.collection("products").doc(pid), {
+          stock: firebase.firestore.FieldValue.increment(deltas[pid])
+        });
+      });
+      await batch.commit();
+
+      // Cost prices are written separately: they live in the owner-only store,
+      // and a failure here must not be reported as a failed delivery.
+      if(updateCost){
+        try{
+          for(const pid of Object.keys(deltas)){
+            const p = products.find(x => x.id === pid);
+            const lines = deliveryLines.filter(l => l.productId === pid);
+            const qty = lines.reduce((a, l) => a + l.qty, 0);
+            const value = lines.reduce((a, l) => a + l.qty * l.unitCost, 0);
+            const newUnit = qty > 0 ? value / qty : 0;
+            const oldCost = productCosts[pid] ? Number(productCosts[pid].cost) : NaN;
+            const oldStock = p ? (Number(p.stock) || 0) : 0;
+            const blended = (isFinite(oldCost) && oldCost > 0 && oldStock > 0)
+              ? (oldStock * oldCost + qty * newUnit) / (oldStock + qty)
+              : newUnit;
+            await db.collection("productCosts").doc(pid).set(
+              { cost: Math.round(blended * 100) / 100 }, { merge: true }
+            );
+          }
+        }catch(err){
+          console.error(err);
+          showToast("Delivery saved, but cost prices didn't update");
+        }
+      }
+
+      closeSheet("deliverySheet");
+      deliveryLines = [];
+      showToast(consignment ? "Consignment delivery recorded" : cod ? "Delivery recorded and paid" : "Delivery recorded");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't record the delivery");
+    }
+  }
+
+  // ---- Recording a payment --------------------------------------------
+  function openPaymentSheet(supplierId){
+    if(suppliers.length === 0){ showToast("Add a supplier first"); return; }
+    fillSupplierSelect($("pay-supplier"), supplierId);
+    $("pay-date").value = todayISO();
+    $("pay-amount").value = "";
+    $("pay-ref").value = "";
+    refreshPaymentTargets();
+    openSheet("paymentSheet");
+  }
+  function refreshPaymentTargets(){
+    const sid = $("pay-supplier").value;
+    const open = purchases
+      .filter(p => p.supplierId === sid && purchaseOutstanding(p) > 0.005)
+      .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    const sel = $("pay-purchase");
+    sel.innerHTML = `<option value="">Oldest unpaid first</option>` + open.map(p =>
+      `<option value="${p.id}">${escapeHtml(p.date || "")} · ${peso(purchaseOutstanding(p))}${p.ref ? " · " + escapeHtml(p.ref) : ""}</option>`
+    ).join("");
+    const bal = supplierBalance(sid);
+    $("pay-balanceNote").innerHTML = bal > 0.005
+      ? `Outstanding balance <b>${peso(bal)}</b> across ${open.length} deliver${open.length === 1 ? "y" : "ies"}.`
+      : "Nothing outstanding with this supplier.";
+  }
+
+  async function savePayment(){
+    const sid = $("pay-supplier").value;
+    const amount = parseFloat($("pay-amount").value);
+    if(!sid){ showToast("Choose a supplier"); return; }
+    if(isNaN(amount) || amount <= 0){ showToast("Enter an amount"); return; }
+    const bal = supplierBalance(sid);
+    if(amount > bal + 0.005 && !confirm(`That's more than the ${peso(bal)} outstanding. Record it anyway?`)) return;
+
+    const chosen = $("pay-purchase").value;
+    // Payments spread over the oldest unpaid deliveries first unless one is
+    // named, which is how suppliers apply them in practice.
+    const targets = chosen
+      ? purchases.filter(p => p.id === chosen)
+      : purchases.filter(p => p.supplierId === sid && purchaseOutstanding(p) > 0.005)
+                 .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+
+    const payment = {
+      supplierId: sid,
+      supplierName: (supplierById(sid) || {}).name || null,
+      purchaseId: chosen || null,
+      amount,
+      date: $("pay-date").value || todayISO(),
+      method: $("pay-method").value,
+      ref: $("pay-ref").value.trim() || null,
+      createdAt: new Date().toISOString(),
+      byUid: (auth.currentUser && auth.currentUser.uid) || null
+    };
+
+    try{
+      const batch = db.batch();
+      batch.set(db.collection("supplierPayments").doc(), payment);
+      let left = amount;
+      for(const p of targets){
+        if(left <= 0.005) break;
+        const out = purchaseOutstanding(p);
+        const apply = Math.min(out, left);
+        left -= apply;
+        const paid = (Number(p.paidAmount) || 0) + apply;
+        batch.update(db.collection("purchases").doc(p.id), {
+          paidAmount: Math.round(paid * 100) / 100,
+          status: paid >= purchaseBilled(p) - 0.005 ? "paid" : "partial"
+        });
+      }
+      await batch.commit();
+      closeSheet("paymentSheet");
+      showToast("Payment recorded");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't record the payment");
+    }
+  }
+
+  function exportOrderPlan(){
+    if(!lastOrderPlan || lastOrderPlan.length === 0){ showToast("Nothing to export yet"); return; }
+    const headers = ["Product","Supplier","In stock","Sells per day","Days of cover","Order qty","Cost per pack","Order cost","Profit per day","Return per day","Funded"];
+    const rows = lastOrderPlan.map(pl => [
+      pl.p.name,
+      pl.sup ? pl.sup.name : "",
+      formatStock(pl.stock),
+      pl.v.toFixed(3),
+      pl.cover === Infinity ? "" : pl.cover.toFixed(1),
+      pl.suggest,
+      pl.m ? pl.m.cost.toFixed(2) : "",
+      pl.cashNeeded != null ? pl.cashNeeded.toFixed(2) : "",
+      pl.profitPerDay != null ? pl.profitPerDay.toFixed(2) : "",
+      pl.roc != null ? (pl.roc * 100).toFixed(2) + "%" : "",
+      pl.funded ? "Yes" : "No"
+    ]);
+    downloadCsv("order-list-" + todayISO() + ".csv", headers, rows);
+  }
+
+  function bindBuyingUI(){
+    const on = (id, ev, fn) => { const el = $(id); if(el) el[ev] = fn; };
+    on("addSupplierBtn", "onclick", () => openSupplierSheet(null));
+    on("saveSupplierBtn", "onclick", saveSupplier);
+    on("deleteSupplierBtn", "onclick", deleteSupplier);
+    on("sup-terms", "onchange", updateSupplierTermsUI);
+    on("dl-addLineBtn", "onclick", addDeliveryLine);
+    on("dl-supplier", "onchange", updateDeliveryTermsNote);
+    on("dl-date", "onchange", updateDeliveryTermsNote);
+    on("dl-updateCost", "onchange", renderDeliveryLines);
+    on("saveDeliveryBtn", "onclick", saveDelivery);
+    on("pay-supplier", "onchange", refreshPaymentTargets);
+    on("savePaymentBtn", "onclick", savePayment);
+    on("buyBudgetInput", "oninput", renderOrderPlan);
+    on("buyFilterSelect", "onchange", renderOrderPlan);
+    on("exportOrderPlanBtn", "onclick", exportOrderPlan);
   }
 
   // ---------- Init ----------
@@ -5037,6 +6111,7 @@
 
   function wireEvents(){
     document.querySelectorAll(".tab-btn").forEach(b => b.onclick = () => switchView(b.dataset.view));
+    bindBuyingUI();
     $("searchInput").oninput = renderProductGrid;
     $("invSearchInput").oninput = renderInventory;
     $("cartBar").onclick = () => { renderCartSheet(); openSheet("cartSheet"); };
