@@ -664,6 +664,7 @@
     <div class="search-wrap">
       <input type="text" id="invSearchInput" placeholder="Search inventory…">
     </div>
+    <button class="btn btn-secondary" id="startCountBtn" style="margin:0 0 12px;">📋 Count stock</button>
     <div id="loadingInv" class="loading-wrap">Loading inventory…</div>
     <div id="invList" style="display:none;"></div>
     <div class="empty-state" id="emptyInv" style="display:none;">
@@ -691,6 +692,15 @@
   <section class="view" id="view-sales">
     <div id="loadingSales" class="loading-wrap">Loading sales…</div>
     <div id="salesContent" style="display:none;">
+
+      <div class="section-label" style="margin-top:0;" id="dayCardLabel">The business day</div>
+      <div class="report-card" id="dayCard" style="margin-bottom:14px;">
+        <div id="daySummary"></div>
+        <div class="btn-row" style="margin-top:12px;">
+          <button class="btn btn-secondary" id="xReadingBtn" style="flex:0 0 40%;">X-reading</button>
+          <button class="btn btn-primary" id="dayActionBtn">Close the day</button>
+        </div>
+      </div>
 
       <div class="dash-header">
         <div class="chips period-chips" id="periodChips">
@@ -766,22 +776,64 @@
         <label>Cash you can spend on stock right now</label>
         <input type="number" id="buyBudgetInput" inputmode="decimal" placeholder="e.g. 20000">
       </div>
-      <div class="biz-summary-line" id="budgetNote" style="margin-bottom:12px;"></div>
-      <div class="field">
-        <label>Show</label>
-        <select id="buyFilterSelect">
-          <option value="due">Only what needs ordering</option>
-          <option value="all">Every product with sales</option>
-        </select>
+      <div class="field-row">
+        <div class="field">
+          <label>Keep back (₱)</label>
+          <input type="number" id="buyReserveInput" inputmode="decimal" placeholder="e.g. 3000">
+        </div>
+        <div class="field">
+          <label>Most on one item (%)</label>
+          <input type="number" id="buyCapInput" inputmode="numeric" min="5" max="100" placeholder="25">
+        </div>
       </div>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:-6px 0 10px;">The reserve is never spent on stock — it's what lets you buy the fast mover when a truck turns up unannounced. The cap stops one big order swallowing the week and leaving you with a shop full of one thing. Both are saved and shared across your devices.</p>
+      <div class="biz-summary-line" id="budgetNote" style="margin-bottom:12px;"></div>
+      <div class="field-row">
+        <div class="field">
+          <label>Show</label>
+          <select id="buyFilterSelect">
+            <option value="due">Only what needs ordering</option>
+            <option value="all">Every product with sales</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Supplier</label>
+          <select id="buySupplierSelect"></select>
+        </div>
+      </div>
+      <div id="supplierOrderNote" style="display:none;" class="biz-summary-line"></div>
       <div id="orderPlanList"></div>
+      <button class="btn btn-primary" id="savePlanAsOrderBtn" style="margin-top:12px;display:none;">Place this as an order</button>
+      <button class="btn btn-secondary" id="startDeliveryFromPlanBtn" style="margin-top:8px;display:none;">It already arrived — record a delivery</button>
       <button class="btn btn-secondary" id="exportOrderPlanBtn" style="margin-top:12px;">Download order list (CSV)</button>
+    </div>
+
+    <div class="section-label">Orders placed, not yet arrived</div>
+    <div class="report-card">
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 12px;">An order you have asked for but not received. Nothing is owed until the goods turn up, so these stay out of your payables — but they are what a delivery gets checked against when it does.</p>
+      <div id="openOrdersList"></div>
+    </div>
+
+    <div class="section-label">Going off soon</div>
+    <div class="report-card">
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 12px;">Stock with a date on it, ranked by how much money is at risk. Sold at a markdown it is still worth something; thrown away it is worth nothing, and the difference is usually larger than the discount.</p>
+      <div class="field">
+        <label>Warn me this many days ahead</label>
+        <input type="number" id="expiryWindowInput" inputmode="numeric" min="1" placeholder="30">
+      </div>
+      <div id="expiringList"></div>
     </div>
 
     <div class="section-label">Cash stuck on your shelves</div>
     <div class="report-card">
       <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 12px;">Stock that isn't moving is money you've already spent and can't use. These are the lines worth marking down, returning, or simply not reordering.</p>
       <div id="deadStockList"></div>
+    </div>
+
+    <div class="section-label">What your costs have been doing</div>
+    <div class="report-card">
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 12px;">Every change to what a product costs you, newest first. A supplier whose prices creep up quietly is the hardest kind to notice.</p>
+      <div id="costChangeList"></div>
     </div>
 
     <div class="section-label">Delivery history</div>
@@ -935,6 +987,27 @@
       <div id="stockLogList"></div>
     </div>
 
+    <div class="section-label">Daily e-Journal &amp; Z-readings</div>
+    <div class="report-card" id="journalBlock">
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 10px;">The e-Journal is a plain text copy of one day: every invoice with its items, the discounts granted, and the Z-reading that closed the day. Keep these — BIR expects the daily journal to be preserved and producible, and a PDF report is not the same thing.</p>
+      <div class="field">
+        <label>Day</label>
+        <input type="date" id="journalDateInput">
+      </div>
+      <button class="btn btn-secondary" id="downloadJournalBtn">Download that day's e-Journal</button>
+      <div id="zHistoryList" style="margin-top:14px;"></div>
+    </div>
+
+    <div class="section-label">Stock loss (for the quarter above)</div>
+    <div class="report-card download-list" id="lossReportBlock">
+      <div id="lossReportSummary" style="margin-bottom:10px;">Loading…</div>
+      <div class="report-download-row">
+        <span class="name">Every stock movement</span>
+        <div class="actions"><button class="csv" id="dlLossBtn">CSV</button><button id="prLossBtn">Print</button></div>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:10px 0 0;">Loss is valued at each product's cost, not its selling price — this is money you paid out, not sales you missed. Deliveries and corrections are listed but not counted as loss. A line valued at ₱0 means no cost has been recorded for that product yet.</p>
+    </div>
+
     <div class="section-label">Product suggestions (storefront)</div>
     <div class="report-card">
       <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 10px;">When a customer's cart has an item from one category, your storefront can quietly show a small "goes well with" row suggesting items from another category — never a pop-up, and easy to ignore. Set which categories pair together.</p>
@@ -997,6 +1070,16 @@
       <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:10px 0 0;">These cover sales only. If you also record purchases/expenses elsewhere, your bookkeeper will combine them for the complete books. "Print" formats the page for regular bond paper (A4/letter), signature lines included — not the narrow receipt-printer format.</p>
     </div>
 
+    <div class="section-label" id="scpwdReportLabel">Senior Citizen &amp; PWD discounts (for the quarter above)</div>
+    <div class="report-card download-list" id="scpwdReportBlock">
+      <div id="scpwdReportSummary" style="margin-bottom:10px;"></div>
+      <div class="report-download-row">
+        <span class="name">Discounts granted</span>
+        <div class="actions"><button class="csv" id="dlScpwdBtn">CSV</button><button id="prScpwdBtn">Print</button></div>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:10px 0 0;">Keep this with your books. The discounts you grant are deducted from your gross sales before tax, and BIR expects the name, ID number and amount behind each one — which is what this list holds.</p>
+    </div>
+
     <div class="section-label">Making this legally official</div>
     <div class="report-card">
       <p style="font-size:13px;color:var(--text-muted);line-height:1.65;margin:0 0 10px;">Printing a document doesn't make it BIR-legal on its own — only your BIR Regional District Office (RDO) can actually approve/stamp these. This POS gets the paperwork ready; these steps are still yours to do in person or via your RDO/accountant:</p>
@@ -1054,10 +1137,52 @@
   <div class="sheet-header"><h2>Your cart</h2><button class="sheet-close" data-close>✕</button></div>
   <div class="sheet-body">
     <div id="cartItemsWrap"></div>
+    <div class="field" style="margin-top:10px;">
+      <label>Paid with</label>
+      <select id="cartPayment">
+        <option value="cash">Cash</option>
+        <option value="gcash">GCash</option>
+      </select>
+    </div>
+    <button class="btn btn-secondary" id="scpwdBtn" style="margin:0 0 4px;">🪪 Senior / PWD discount</button>
+    <div class="summary-row" id="cartSubtotalRow" style="display:none;"><span>Subtotal</span><span id="cartSubtotal">₱0.00</span></div>
+    <div class="summary-row" id="cartDiscountRow" style="display:none;"><span id="cartDiscountLabel">Discount</span><span id="cartDiscountAmt">₱0.00</span></div>
     <div class="summary-row total"><span>Total</span><span id="cartTotal">₱0.00</span></div>
     <div class="btn-row">
       <button class="btn btn-danger" id="clearCartBtn" style="flex:0 0 40%;">Clear</button>
       <button class="btn btn-primary" id="checkoutBtn">Complete sale</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="scpwdSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2>Senior / PWD discount</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <div class="field">
+      <label>Who is claiming it</label>
+      <select id="sc-kind">
+        <option value="senior">Senior Citizen</option>
+        <option value="pwd">Person with Disability</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Full name</label>
+      <input type="text" id="sc-name" placeholder="Exactly as printed on the ID">
+    </div>
+    <div class="field">
+      <label>ID number</label>
+      <input type="text" id="sc-id" placeholder="OSCA or PWD ID number">
+    </div>
+    <div class="field">
+      <label>Purchase booklet no. (optional)</label>
+      <input type="text" id="sc-booklet" placeholder="If they brought their booklet">
+    </div>
+    <div class="report-card" id="scBreakdown" style="margin-bottom:12px;"></div>
+    <p style="font-size:12px;color:var(--text-muted);line-height:1.6;margin:0 0 14px;">Write this purchase in the customer's booklet as well. The ₱2,500 weekly ceiling runs across every store they shop at, so only their own booklet can show how much of it is left — this POS can only cap what it grants today.</p>
+    <div class="btn-row">
+      <button class="btn btn-danger" id="scRemoveBtn" style="flex:0 0 40%;display:none;">Remove</button>
+      <button class="btn btn-primary" id="scApplyBtn">Apply discount</button>
     </div>
   </div>
 </div>
@@ -1182,10 +1307,30 @@
         <input type="number" id="pf-threshold" inputmode="numeric" placeholder="5">
       </div>
     </div>
+    <div class="field" id="pf-scpwdField">
+      <label>Senior / PWD discount</label>
+      <select id="pf-scpwd">
+        <option value="">Not discountable</option>
+        <option value="basic">Basic necessity or prime commodity — 5%</option>
+        <option value="medicine">Medicine — 20%</option>
+      </select>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Rice, bread, fish, meat, eggs, vegetables, fruit, cooking oil, sugar, salt, milk, coffee, noodles, canned goods, laundry soap, detergent, candles and LPG are basic necessities or prime commodities — set those to 5%. Medicines carry 20%. Soft drinks, snacks, cigarettes and load stay on "Not discountable".</p>
+    </div>
     <div class="field" id="pf-supplierField">
       <label>Supplier (optional)</label>
       <select id="pf-supplier"></select>
       <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Setting this lets the Buying tab use that supplier's delivery time and visit cycle when working out how much to order.</p>
+    </div>
+    <div class="field" id="pf-perishableField">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
+        <input type="checkbox" id="pf-perishable" style="width:auto;">
+        This goes off — ask me for an expiry date when it's delivered
+      </label>
+    </div>
+    <div class="field" id="pf-orderMultipleField">
+      <label>Ordered in lots of (optional)</label>
+      <input type="number" id="pf-orderMultiple" inputmode="numeric" min="1" placeholder="1">
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">If the supplier only sells this by the case or sack, put how many packs are in one. Order suggestions round up to it, so what the Buying tab tells you is something you can actually order.</p>
     </div>
     <div class="field">
       <label>Barcode (optional)</label>
@@ -1220,6 +1365,158 @@
   </div>
 </div>
 
+<div class="sheet" id="creditSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2>Supplier credit</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 14px;">When the invoice asks for more than actually arrived — short delivery, damaged goods, a price that isn't what was agreed — record what they owe you back. It comes straight off their balance.</p>
+    <div class="field">
+      <label>Supplier</label>
+      <select id="cr-supplier"></select>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="cr-date">
+      </div>
+      <div class="field">
+        <label>Amount (₱)</label>
+        <input type="number" id="cr-amount" inputmode="decimal" placeholder="0.00">
+      </div>
+    </div>
+    <div class="field">
+      <label>Why</label>
+      <select id="cr-reason">
+        <option value="short">Short delivery — billed for more than arrived</option>
+        <option value="damaged">Damaged or unsaleable on arrival</option>
+        <option value="price">Price billed was wrong</option>
+        <option value="returned">Goods returned to the supplier</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Their reference (optional)</label>
+      <input type="text" id="cr-ref" placeholder="Credit memo or invoice number">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveCreditBtn">Record the credit</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="returnSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2 id="returnTitle">Return items</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 12px;" id="returnIntro"></p>
+    <div id="returnLines" style="margin-bottom:12px;"></div>
+    <div class="field">
+      <label>Why</label>
+      <select id="rt-reason">
+        <option value="mistake">Rung up by mistake</option>
+        <option value="changed">Customer changed their mind</option>
+        <option value="wrong">Wrong item given</option>
+        <option value="damaged">Item was damaged or spoiled</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Do the goods go back on the shelf?</label>
+      <select id="rt-restock">
+        <option value="yes">Yes — put them back in stock</option>
+        <option value="no">No — they can't be sold again</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Money given back as</label>
+      <select id="rt-method">
+        <option value="cash">Cash from the drawer</option>
+        <option value="gcash">GCash</option>
+        <option value="none">Nothing — no money changed hands</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Note (optional)</label>
+      <input type="text" id="rt-note" placeholder="Anything worth remembering">
+    </div>
+    <div class="report-card" id="returnSummary" style="margin-bottom:12px;"></div>
+    <p style="font-size:12px;color:var(--text-muted);line-height:1.6;margin:0 0 14px;">The original sale is never altered — it stays exactly as it was rung. This records a separate credit document against it, which is what lets both the mistake and its correction stay visible.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveReturnBtn">Record the return</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="openDaySheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2>Open the day</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 14px;">Count the money you're putting in the drawer to start with. Tonight's closing count is checked against this, so a wrong figure here becomes a phantom shortage later.</p>
+    <div class="field">
+      <label>Opening float (₱)</label>
+      <input type="number" id="od-float" inputmode="decimal" placeholder="0.00">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveOpenDayBtn">Open the day</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="closeDaySheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2>Close the day</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <div class="report-card" id="closeDayExpected" style="margin-bottom:12px;"></div>
+    <div class="field" id="closeFloatField" style="display:none;">
+      <label>Opening float (₱)</label>
+      <input type="number" id="cd-float" inputmode="decimal" placeholder="0.00">
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">The day was never opened, so enter what was in the drawer this morning.</p>
+    </div>
+    <div class="field">
+      <label>Cash counted in the drawer now (₱)</label>
+      <input type="number" id="cd-counted" inputmode="decimal" placeholder="0.00">
+    </div>
+    <div class="report-card" id="closeDayVariance" style="margin-bottom:12px;"></div>
+    <div class="field">
+      <label>Note (optional)</label>
+      <input type="text" id="cd-note" placeholder="e.g. paid the rider ₱150 from the drawer">
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);line-height:1.6;margin:0 0 14px;">Closing is final. Once the day is closed no sale can be recorded into it, by you or by anyone — that is what makes the Z-reading worth anything.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveCloseDayBtn">Close the day</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="readingSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2 id="readingTitle">X-reading</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <div class="receipt" id="readingContent"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="printReadingBtn" style="flex:0 0 40%;">Print</button>
+      <button class="btn btn-primary" id="journalBtn">Download e-Journal</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="countSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2>Count stock</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 12px;">Count what's actually on the shelf and type it in. Leave a line blank to skip it. Nothing is saved until you press Save, and every difference is recorded permanently with its peso value.</p>
+    <div class="field">
+      <label>What to count</label>
+      <select id="countScopeSelect"></select>
+    </div>
+    <div id="countList" style="margin-bottom:12px;"></div>
+    <div class="report-card" id="countSummary" style="margin-bottom:12px;"></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveCountBtn">Save count</button>
+    </div>
+  </div>
+</div>
+
 <div class="sheet" id="stockAdjustSheet">
   <div class="sheet-handle"></div>
   <div class="sheet-header"><h2>Adjust stock</h2><button class="sheet-close" data-close>✕</button></div>
@@ -1234,11 +1531,16 @@
       <select id="adjustReasonSelect">
         <option value="recount">Physical recount</option>
         <option value="delivery">New delivery received</option>
-        <option value="damaged">Damaged / expired</option>
-        <option value="lost">Missing / lost</option>
+        <option value="spoiled">Spoiled / expired</option>
+        <option value="damaged">Damaged / broken</option>
+        <option value="lost">Missing — no explanation</option>
+        <option value="taken">Taken without payment</option>
+        <option value="givenaway">Given away / own use</option>
+        <option value="found">Found / was miscounted</option>
         <option value="correction">Correcting an entry mistake</option>
         <option value="other">Other</option>
       </select>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;" id="adjustValueHint"></p>
     </div>
     <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:-6px 0 12px;">This change is recorded permanently with your name, the date, and the before/after count. It can't be edited or deleted afterwards.</p>
     <div class="btn-row">
@@ -1521,13 +1823,25 @@
         <input type="number" id="dl-unitCost" inputmode="decimal" placeholder="e.g. 58.50">
       </div>
     </div>
+    <div class="field">
+      <label>Expiry date (optional)</label>
+      <input type="date" id="dl-expiry">
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Fill this in for anything that goes off. It's the only moment the date is in front of you — read it off the pack now and the POS can warn you while the stock is still sellable.</p>
+    </div>
     <button class="btn btn-secondary" id="dl-addLineBtn">Add to this delivery</button>
     <div id="dl-lines" style="margin-top:12px;"></div>
-    <div class="summary-row total"><span>Delivery total</span><span id="dl-total">₱0.00</span></div>
+    <div class="summary-row total"><span>Goods total</span><span id="dl-total">₱0.00</span></div>
+
+    <div class="field" style="margin-top:10px;">
+      <label>Hauling / freight for this delivery (₱)</label>
+      <input type="number" id="dl-freight" inputmode="decimal" placeholder="0.00">
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">What it cost to get these goods to the shop — the hauler, the tricycle, the fare. It is spread across the items by value, so a ₱300 haul lands mostly on the ₱3,000 of rice and barely on the ₱200 of sachets. It does <b>not</b> go on the supplier's bill; you pay the hauler separately.</p>
+    </div>
+    <div class="summary-row" id="dl-landedRow" style="display:none;"><span>Landed total</span><span id="dl-landedTotal">₱0.00</span></div>
 
     <label style="display:flex;align-items:flex-start;gap:9px;padding:12px 0;font-size:13px;">
       <input type="checkbox" id="dl-updateCost" checked style="width:auto;margin-top:2px;">
-      <span>Update my cost prices from this delivery<br><span style="font-size:11px;color:var(--text-muted);">Blends the new cost with what you already hold, in proportion to the quantities. Your margin reports then show what you really paid.</span></span>
+      <span>Update my cost prices from this delivery<br><span style="font-size:11px;color:var(--text-muted);">Blends the landed cost — goods plus their share of the hauling — with what you already hold, in proportion to the quantities. Every change is kept with its date, so last month's profit is still measured against last month's cost.</span></span>
     </label>
 
     <div id="dl-termsNote" class="biz-summary-line" style="margin-bottom:12px;"></div>
@@ -1715,6 +2029,7 @@
   let sales = [];        // {id,timestamp,items:[{productId,name,price,qty}],total,source}
   let orders = [];        // {id,code,customerName,phone,method,address,paymentMethod,gcashRef,items,total,status,createdAt}
   let cart = [];           // {productId,name,price,qty,stock,unit:'pack'|'sub',subUnitsPerPack,subUnitName}
+  let cartDiscount = null; // {kind:'senior'|'pwd',name,idNumber,booklet} — cleared with the cart
   let activeCategory = "All";
   let editingProductId = null;
   let adjustingProductId = null;
@@ -1734,6 +2049,7 @@
   let bizSettings = { name:"", address:"", tin:"", taxType:"non_vat", accreditation:"" };
   let reportQuarter = null; // {year, q} — set on init to the current quarter
   let reportSalesCache = []; // sales fetched for the currently-viewed quarter
+  let reportStockCache = []; // stock movements for that same quarter
   let designSettings = { storeName:"", tagline:"", primaryColor:"#3A2160", logo:null };
   let editingZoneIndex = null; // index into designSettings.deliveryZones, or null for a new one
   const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -1749,6 +2065,8 @@
   let currentUserActive = true;
   let staffList = []; // for the owner's Staff accounts management UI
   let stockLogs = []; // append-only audit trail of manual stock corrections
+  let dayOpenings = []; // {id:YYYY-MM-DD, float, byName, openedAt}
+  let dayClosings = []; // {id:YYYY-MM-DD, zNumber, expectedCash, countedCash, variance, ...}
   let productCosts = {}; // productId -> {cost,opCost,markup,competitorPrice} — owner only
   let marginSort = "worst";
 
@@ -2439,16 +2757,17 @@
     { key: "bir",      label: "BIR reports & invoices",    hint: "Tax estimates, books of accounts, invoice numbering" },
     { key: "margins",  label: "Costs & profit margins",    hint: "Base cost, markup, margin reporting" },
     { key: "staff",    label: "Staff & manager accounts",  hint: "Separate logins per cashier" },
-    { key: "buying",   label: "Suppliers & ordering",      hint: "What you owe suppliers, and what to reorder" }
+    { key: "buying",   label: "Suppliers & ordering",      hint: "What you owe suppliers, and what to reorder" },
+    { key: "scpwd",    label: "Senior & PWD discount",     hint: "5% on basic necessities, 20% on medicines. BMBEs and co-ops are exempt — switch off if that's you" }
   ];
 
   // Sensible starting points. A shop can still switch anything afterwards.
   const BIZ_PROFILES = {
-    sarisari: ["tingi","barcode","printer","online","delivery","bir","margins","staff","buying"],
-    pharmacy: ["barcode","printer","bir","margins","staff","buying"],
-    hardware: ["tingi","barcode","printer","online","delivery","bir","margins","staff","buying"],
-    food:     ["printer","online","delivery","bir","margins","staff","buying"],
-    retail:   ["barcode","printer","online","bir","margins","staff","buying"]
+    sarisari: ["tingi","barcode","printer","online","delivery","bir","margins","staff","buying","scpwd"],
+    pharmacy: ["barcode","printer","bir","margins","staff","buying","scpwd"],
+    hardware: ["tingi","barcode","printer","online","delivery","bir","margins","staff","buying","scpwd"],
+    food:     ["printer","online","delivery","bir","margins","staff","buying","scpwd"],
+    retail:   ["barcode","printer","online","bir","margins","staff","buying","scpwd"]
   };
 
   function featureOn(key){
@@ -2528,7 +2847,9 @@
       ["birBlock", "bir"],
       ["marginBlock", "margins"],
       ["pricingHelperBlock", "margins"],
-      ["staffBlock", "staff"]
+      ["staffBlock", "staff"],
+      ["pf-scpwdField", "scpwd"],
+      ["pf-orderMultipleField", "buying"]
     ];
     blocks.forEach(([id, key]) => {
       const el = $(id);
@@ -3255,7 +3576,26 @@
       push(Array.from(enc.encode(left + right + "\n")));
     });
     push(Array.from(enc.encode("--------------------------------\n")));
-    push(Array.from(enc.encode("TOTAL".padEnd(24," ") + peso(sale.total).padStart(8," ") + "\n\n\n\n")));
+    const sd = sale.discount;
+    if(sd && sd.amount > 0){
+      const sub = sale.subtotal != null ? sale.subtotal : sale.total + sd.amount;
+      push(Array.from(enc.encode("Subtotal".padEnd(24," ") + peso(sub).padStart(8," ") + "\n")));
+      if(sd.basicDiscount > 0){
+        push(Array.from(enc.encode(("Less " + sd.basicRate + "% SC/PWD").padEnd(24," ") + ("-" + peso(sd.basicDiscount)).padStart(8," ") + "\n")));
+      }
+      if(sd.medicineDiscount > 0){
+        push(Array.from(enc.encode(("Less " + sd.medicineRate + "% medicine").padEnd(24," ") + ("-" + peso(sd.medicineDiscount)).padStart(8," ") + "\n")));
+      }
+    }
+    push(Array.from(enc.encode("TOTAL".padEnd(24," ") + peso(sale.total).padStart(8," ") + "\n")));
+    if(sd && sd.amount > 0){
+      push(Array.from(enc.encode("--------------------------------\n")));
+      push(Array.from(enc.encode(scpwdKindLabel(sd.kind) + ": " + sd.name + "\n")));
+      push(Array.from(enc.encode("ID No.: " + sd.idNumber + "\n")));
+      if(sd.booklet) push(Array.from(enc.encode("Booklet No.: " + sd.booklet + "\n")));
+      push(Array.from(enc.encode("\nSignature: ____________________\n")));
+    }
+    push(Array.from(enc.encode("\n\n\n")));
     push([0x1D, 0x56, 0x00]); // partial cut, if the printer supports it
     return new Uint8Array(bytes);
   }
@@ -3446,6 +3786,17 @@
     ownerListenerUnsubs.push(db.collection("staff").onSnapshot((snap) => {
       staffList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderStaffList();
+    }, (err) => { console.error(err); }));
+
+    managerListenerUnsubs.push(db.collection("dayOpenings").orderBy(firebase.firestore.FieldPath.documentId(), "desc").limit(120).onSnapshot((snap) => {
+      dayOpenings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderDayCard();
+    }, (err) => { console.error(err); }));
+
+    managerListenerUnsubs.push(db.collection("dayClosings").orderBy(firebase.firestore.FieldPath.documentId(), "desc").limit(120).onSnapshot((snap) => {
+      dayClosings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderDayCard();
+      renderZHistory();
     }, (err) => { console.error(err); }));
 
     ownerListenerUnsubs.push(db.collection("stockLogs").orderBy("timestamp", "desc").limit(100).onSnapshot((snap) => {
@@ -3780,8 +4131,141 @@
     renderCartSheet();
   }
 
-  function cartTotal(){
+  // ---------- Senior Citizen & PWD discounts ----------
+  //
+  // Two different legal benefits sit behind one button, and mixing them up is
+  // the usual mistake.
+  //
+  // The familiar 20% covers medicines, restaurants, transport and medical
+  // services. A grocery sells almost none of that. What a grocery owes is the
+  // 5% special discount on basic necessities and prime commodities — rice,
+  // bread, fish, meat, eggs, vegetables, cooking oil, soap, LPG and the rest
+  // of the listed goods — which the DTI-DA-DOE joint order caps at ₱125 of
+  // discount on ₱2,500 of purchases per week, recorded in the customer's own
+  // purchase booklet. Soft drinks, snacks, cigarettes and load are not on the
+  // list and get nothing, which is why each product carries its own setting
+  // rather than the whole basket being assumed eligible.
+  //
+  // The weekly ceiling follows the customer, not the shop: they may have spent
+  // it elsewhere this week. The booklet is the only record that sees all of it,
+  // so this caps a single sale and leaves the running total to the booklet.
+  const SCPWD_DEFAULTS = {
+    enabled: true,
+    basicRate: 5,
+    medicineRate: 20,
+    weeklyPurchaseCap: 2500,
+    weeklyDiscountCap: 125
+  };
+
+  function scpwdConfig(){
+    const c = designSettings.scpwd;
+    return Object.assign({}, SCPWD_DEFAULTS, (c && typeof c === "object") ? c : {});
+  }
+  function scpwdActive(){ return featureOn("scpwd") && scpwdConfig().enabled !== false; }
+  function round2(n){ return Math.round((Number(n) || 0) * 100) / 100; }
+
+  function scpwdKindLabel(kind){ return kind === "pwd" ? "PWD" : "Senior Citizen"; }
+
+  // Works the discount out from cart lines. Each line is matched back to its
+  // product to read the eligibility set in Inventory; a line whose product has
+  // been deleted mid-sale simply earns nothing rather than throwing.
+  function scpwdBreakdown(lines){
+    const cfg = scpwdConfig();
+    let basicBase = 0, medicineBase = 0;
+    (lines || []).forEach(l => {
+      const p = products.find(x => x.id === l.productId);
+      const amount = (Number(l.price) || 0) * (Number(l.qty) || 0);
+      if(!p || !p.scpwd) return;
+      if(p.scpwd === "basic") basicBase += amount;
+      else if(p.scpwd === "medicine") medicineBase += amount;
+    });
+    const cappedBasicBase = Math.min(basicBase, cfg.weeklyPurchaseCap);
+    const basicDiscount = round2(cappedBasicBase * cfg.basicRate / 100);
+    const medicineDiscount = round2(medicineBase * cfg.medicineRate / 100);
+    return {
+      basicBase: round2(basicBase),
+      cappedBasicBase: round2(cappedBasicBase),
+      basicRate: cfg.basicRate,
+      basicDiscount,
+      medicineBase: round2(medicineBase),
+      medicineRate: cfg.medicineRate,
+      medicineDiscount,
+      amount: round2(basicDiscount + medicineDiscount),
+      hitWeeklyCap: basicBase > cfg.weeklyPurchaseCap
+    };
+  }
+
+  function cartSubtotal(){
     return cart.reduce((sum, c) => sum + c.price * c.qty, 0);
+  }
+
+  function cartDiscountAmount(){
+    if(!cartDiscount || !scpwdActive()) return 0;
+    return scpwdBreakdown(cart).amount;
+  }
+
+  function cartTotal(){
+    return Math.max(0, round2(cartSubtotal() - cartDiscountAmount()));
+  }
+
+  function openScpwdSheet(){
+    if(cart.length === 0){ showToast("Add something to the cart first"); return; }
+    $("sc-kind").value = cartDiscount ? cartDiscount.kind : "senior";
+    $("sc-name").value = cartDiscount ? cartDiscount.name : "";
+    $("sc-id").value = cartDiscount ? cartDiscount.idNumber : "";
+    $("sc-booklet").value = cartDiscount && cartDiscount.booklet ? cartDiscount.booklet : "";
+    $("scRemoveBtn").style.display = cartDiscount ? "block" : "none";
+    renderScpwdBreakdown();
+    openSheet("scpwdSheet");
+  }
+
+  function renderScpwdBreakdown(){
+    const bd = scpwdBreakdown(cart);
+    const cfg = scpwdConfig();
+    let html = "";
+    if(bd.amount <= 0){
+      html = `<div class="report-row"><span>Nothing in this cart qualifies.</span></div>
+        <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:8px 0 0;">Products earn the discount only once they're marked in Inventory — open a product and set "Senior / PWD discount".</p>`;
+    } else {
+      if(bd.basicBase > 0){
+        html += `<div class="report-row"><span>Basic necessities &amp; prime commodities</span><span>${peso(bd.basicBase)}</span></div>`;
+        if(bd.hitWeeklyCap){
+          html += `<div class="report-row" style="color:var(--danger);"><span>Above the ${peso(cfg.weeklyPurchaseCap)} weekly ceiling — only ${peso(bd.cappedBasicBase)} of it earns the discount</span></div>`;
+        }
+        html += `<div class="report-row"><span>${cfg.basicRate}% of ${peso(bd.cappedBasicBase)}</span><span>${peso(bd.basicDiscount)}</span></div>`;
+      }
+      if(bd.medicineBase > 0){
+        html += `<div class="report-row"><span>Medicines</span><span>${peso(bd.medicineBase)}</span></div>`;
+        html += `<div class="report-row"><span>${cfg.medicineRate}% of ${peso(bd.medicineBase)}</span><span>${peso(bd.medicineDiscount)}</span></div>`;
+      }
+      html += `<div class="report-row total"><span>Discount</span><span>${peso(bd.amount)}</span></div>`;
+    }
+    $("scBreakdown").innerHTML = html;
+  }
+
+  function applyScpwdDiscount(){
+    const kind = $("sc-kind").value === "pwd" ? "pwd" : "senior";
+    const name = $("sc-name").value.trim();
+    const idNumber = $("sc-id").value.trim();
+    const booklet = $("sc-booklet").value.trim();
+    // Name and ID aren't optional paperwork — the invoice has to carry them,
+    // so a discount can't be granted anonymously.
+    if(!name){ showToast("Enter the name on the ID"); return; }
+    if(!idNumber){ showToast("Enter the ID number"); return; }
+    const bd = scpwdBreakdown(cart);
+    if(bd.amount <= 0){ showToast("Nothing in this cart qualifies"); return; }
+    cartDiscount = { kind, name, idNumber, booklet: booklet || null };
+    closeSheet("scpwdSheet");
+    renderCartSheet();
+    renderCartBar();
+    showToast(scpwdKindLabel(kind) + " discount applied");
+  }
+
+  function removeScpwdDiscount(){
+    cartDiscount = null;
+    closeSheet("scpwdSheet");
+    renderCartSheet();
+    renderCartBar();
   }
 
   function renderCartBar(){
@@ -3818,6 +4302,25 @@
         wrap.appendChild(row);
       });
     }
+    // A discount set on an earlier basket must not survive the basket being
+    // emptied — that would hand the next customer someone else's ID.
+    if(cart.length === 0) cartDiscount = null;
+
+    const btn = $("scpwdBtn");
+    if(btn) btn.style.display = (scpwdActive() && cart.length > 0) ? "block" : "none";
+
+    const disc = cartDiscountAmount();
+    $("cartSubtotalRow").style.display = disc > 0 ? "flex" : "none";
+    $("cartDiscountRow").style.display = disc > 0 ? "flex" : "none";
+    if(disc > 0){
+      $("cartSubtotal").textContent = peso(cartSubtotal());
+      $("cartDiscountLabel").textContent = scpwdKindLabel(cartDiscount.kind) + " discount";
+      $("cartDiscountAmt").textContent = "−" + peso(disc);
+      if(btn) btn.textContent = "🪪 " + cartDiscount.name + " · change";
+    } else if(btn){
+      btn.textContent = "🪪 Senior / PWD discount";
+    }
+
     $("cartTotal").textContent = peso(cartTotal());
     $("checkoutBtn").disabled = cart.length === 0;
   }
@@ -3840,6 +4343,13 @@
 
   async function completeSale(){
     if(cart.length === 0) return;
+    // A closed day is closed. The database rules refuse it too, but failing
+    // here means the cashier is told before the customer has walked off.
+    const businessDate = todayISO();
+    if(dayIsClosed(businessDate)){
+      showToast("Today has already been closed — no more sales can be recorded into it");
+      return;
+    }
     $("checkoutBtn").disabled = true;
     // unit/perPack are carried on the line so profit reporting can cost a
     // piece sale correctly — a stick consumes 1/20th of a pack's cost, not a
@@ -3852,7 +4362,22 @@
       unit: c.unit || "pack",
       perPack: c.unit === "sub" ? (c.subUnitsPerPack || 1) : 1
     }));
-    const total = cartTotal();
+    const subtotal = round2(cartSubtotal());
+    const bd = (cartDiscount && scpwdActive()) ? scpwdBreakdown(cart) : null;
+    const discountRecord = (bd && bd.amount > 0) ? {
+      kind: cartDiscount.kind,
+      name: cartDiscount.name,
+      idNumber: cartDiscount.idNumber,
+      booklet: cartDiscount.booklet || null,
+      basicBase: bd.cappedBasicBase,
+      basicRate: bd.basicRate,
+      basicDiscount: bd.basicDiscount,
+      medicineBase: bd.medicineBase,
+      medicineRate: bd.medicineRate,
+      medicineDiscount: bd.medicineDiscount,
+      amount: bd.amount
+    } : null;
+    const total = round2(subtotal - (discountRecord ? discountRecord.amount : 0));
     let invoiceNumber;
     try{
       invoiceNumber = await getNextInvoiceNumber();
@@ -3865,8 +4390,12 @@
     const sale = {
       timestamp: new Date().toISOString(),
       items: saleItems,
+      subtotal: subtotal,
+      discount: discountRecord,
       total: total,
       source: "pos",
+      payment: ($("cartPayment") && $("cartPayment").value === "gcash") ? "gcash" : "cash",
+      businessDate: businessDate,
       invoiceNumber: invoiceNumber,
       cashierName: currentUserName || null,
       cashierUid: (auth.currentUser && auth.currentUser.uid) || null
@@ -3892,12 +4421,17 @@
       closeSheet("cartSheet");
       openSheet("receiptSheet");
       cart = [];
+      cartDiscount = null;
+      if($("cartPayment")) $("cartPayment").value = "cash";
       renderCartBar();
       renderProductGrid();
       if(btPrinterCharacteristic) openCashDrawer(false);
     }catch(err){
       console.error(err);
-      showToast("Couldn't complete sale — try again");
+      // The invoice number was taken before this write. It is now burnt, and a
+      // gap in the sequence is precisely what a BIR examiner asks about — so
+      // it is named here rather than swallowed.
+      showToast("Sale not recorded. Invoice " + formatInvoiceNumber(invoiceNumber) + " was used up — write it down as unused.");
     }
     $("checkoutBtn").disabled = cart.length === 0;
   }
@@ -3923,7 +4457,25 @@
     sale.items.forEach(it => {
       html += `<div class="rline"><span>${escapeHtml(it.name)} x${it.qty}</span><span>${peso(it.price*it.qty)}</span></div>`;
     });
-    html += `<hr><div class="rline" style="font-weight:800;font-size:15px;"><span>TOTAL</span><span>${peso(sale.total)}</span></div>`;
+    html += `<hr>`;
+    // A discounted invoice has to show the customer's name and ID number and
+    // leave room for their signature — that's what makes the discount
+    // defensible if it's ever questioned.
+    const sd = sale.discount;
+    if(sd && sd.amount > 0){
+      html += `<div class="rline"><span>Subtotal</span><span>${peso(sale.subtotal != null ? sale.subtotal : sale.total + sd.amount)}</span></div>`;
+      if(sd.basicDiscount > 0) html += `<div class="rline"><span>Less ${sd.basicRate}% ${escapeHtml(scpwdKindLabel(sd.kind))} disc.</span><span>−${peso(sd.basicDiscount)}</span></div>`;
+      if(sd.medicineDiscount > 0) html += `<div class="rline"><span>Less ${sd.medicineRate}% on medicines</span><span>−${peso(sd.medicineDiscount)}</span></div>`;
+    }
+    html += `<div class="rline" style="font-weight:800;font-size:15px;"><span>TOTAL</span><span>${peso(sale.total)}</span></div>`;
+    if(sd && sd.amount > 0){
+      html += `<hr><div style="font-size:11px;line-height:1.7;">
+        <div>${escapeHtml(scpwdKindLabel(sd.kind))}: ${escapeHtml(sd.name)}</div>
+        <div>ID No.: ${escapeHtml(sd.idNumber)}</div>
+        ${sd.booklet ? `<div>Booklet No.: ${escapeHtml(sd.booklet)}</div>` : ""}
+        <div style="margin-top:14px;">Signature: ______________________</div>
+      </div>`;
+    }
     if(sale.cashierName) html += `<div style="text-align:center;color:var(--text-muted);font-size:10px;margin-top:8px;">Served by ${escapeHtml(sale.cashierName)}</div>`;
     if(bizSettings.accreditation) html += `<div style="text-align:center;color:var(--text-muted);font-size:10px;margin-top:4px;">${escapeHtml(bizSettings.accreditation)}</div>`;
     $("receiptContent").innerHTML = html;
@@ -3974,6 +4526,92 @@
   // passes through to the BIR — so margin must be worked out on the price net
   // of that. For a Non-VAT store (percentage tax is filed separately, not
   // collected per item) the shelf price is the figure to use as it stands.
+  // ---- Landed cost and cost history -----------------------------------
+  //
+  // Two corrections to the same figure.
+  //
+  // First: what a pack cost you is not what the supplier charged. Getting it
+  // from Iloilo City to Batad costs money too, and leaving that out makes
+  // every margin look better than it is — which matters most on thin lines,
+  // where it is the difference between a small profit and a quiet loss. The
+  // haul is spread across a delivery BY VALUE, so it lands mostly on the sack
+  // of rice and barely on the sachets, which is roughly how the space in the
+  // vehicle was actually used.
+  //
+  // Second: a cost figure describes a moment. Overwriting it means last
+  // month's profit is recalculated at this month's prices every time a
+  // supplier raises theirs — so a good month quietly becomes a bad one on
+  // paper. Every change is therefore kept with its date, and historical profit
+  // is measured against the cost that applied at the time.
+
+  function spreadFreight(lines, freight){
+    const f = Number(freight) || 0;
+    const goods = lines.reduce((sum, l) => sum + (Number(l.qty) || 0) * (Number(l.unitCost) || 0), 0);
+    return lines.map(l => {
+      const qty = Number(l.qty) || 0;
+      const unitCost = Number(l.unitCost) || 0;
+      const value = qty * unitCost;
+      // By value when there is value to go by; otherwise evenly, so a
+      // zero-cost line (a free case, a sample) still carries its share.
+      const share = f <= 0 ? 0 : (goods > 0 ? f * (value / goods) : f / lines.length);
+      const landedUnitCost = qty > 0 ? round2(unitCost + share / qty) : unitCost;
+      return Object.assign({}, l, { freightShare: round2(share), landedUnitCost });
+    });
+  }
+
+  // The cost in force on a given date, from the product's own history.
+  // Sales older than the first recorded change fall back to the current cost —
+  // there is nothing better to use, and it is still closer than nothing.
+  function costAtDate(productId, whenISO){
+    const c = productCosts[productId];
+    if(!c) return null;
+    const current = Number(c.cost);
+    const hist = Array.isArray(c.history) ? c.history : [];
+    if(hist.length === 0) return isFinite(current) && current > 0 ? current : null;
+    let best = null;
+    for(const h of hist){
+      if(!h || !h.at || h.at > whenISO) continue;
+      if(!best || h.at > best.at) best = h;
+    }
+    if(best && isFinite(Number(best.cost)) && Number(best.cost) > 0) return Number(best.cost);
+    // Older than everything on record.
+    const earliest = hist.reduce((a, b) => (!a || (b.at && b.at < a.at) ? b : a), null);
+    if(earliest && isFinite(Number(earliest.cost)) && Number(earliest.cost) > 0) return Number(earliest.cost);
+    return isFinite(current) && current > 0 ? current : null;
+  }
+
+  // Appends a dated entry, keeping the list short enough never to bloat the
+  // document. Costs change a handful of times a year, so 60 is years of them.
+  function costHistoryWith(existing, cost, source){
+    const hist = Array.isArray(existing) ? existing.slice() : [];
+    const last = hist.length ? hist[hist.length - 1] : null;
+    if(last && Math.abs(Number(last.cost) - Number(cost)) < 0.005) return hist; // unchanged
+    hist.push({ cost: round2(cost), at: new Date().toISOString(), source: source || "manual" });
+    return hist.slice(-60);
+  }
+
+  // ---- Returns, and what a "sale" means once they exist ----------------
+  //
+  // A return is stored in the same collection as a sale, with type:"return"
+  // and a POSITIVE total. It is read as negative everywhere money is counted.
+  //
+  // Storing it positive is deliberate: the database rules refuse a negative
+  // total, and those rules are what stop a tampered figure being written. One
+  // helper applies the sign instead, and every place that adds sales up goes
+  // through it — so a return reduces today's takings, the quarter's gross, the
+  // margin report and the measured demand, all from one line of code.
+  //
+  // A return carries its own credit number from a separate counter, so it can
+  // never consume a sales-invoice number and leave a gap in that sequence.
+  function isReturnDoc(s){ return !!s && s.type === "return"; }
+  function saleSign(s){ return isReturnDoc(s) ? -1 : 1; }
+  function signedTotal(s){ return saleSign(s) * (Number(s.total) || 0); }
+  function docNumberOf(s){
+    return isReturnDoc(s)
+      ? "CN-" + String(s.creditNumber || 0).padStart(6, "0")
+      : formatInvoiceNumber(s.invoiceNumber || 0);
+  }
+
   function netOfTax(price){
     const p = Number(price) || 0;
     return bizSettings.taxType === "vat" ? p / 1.12 : p;
@@ -4038,18 +4676,19 @@
     const stats = {};
     sales.forEach(s => {
       if(new Date(s.timestamp).getTime() < cutoff) return;
+      const sign = saleSign(s);
       (s.items || []).forEach(it => {
         const id = it.productId;
         if(!id) return;
         if(!stats[id]) stats[id] = { units: 0, revenue: 0, profit: 0, measurable: true };
-        const qty = Number(it.qty) || 0;
+        const qty = sign * (Number(it.qty) || 0);
         const net = netOfTax(it.price) * qty;
         stats[id].units += qty;
         stats[id].revenue += net;
 
-        const c = productCosts[id];
-        const packCost = c ? Number(c.cost) : NaN;
-        if(!isFinite(packCost) || packCost <= 0){
+        // The cost that applied when this sale happened, not today's.
+        const packCost = costAtDate(id, s.timestamp);
+        if(packCost == null || !isFinite(packCost) || packCost <= 0){
           stats[id].measurable = false;
           return;
         }
@@ -4405,6 +5044,9 @@
         suppliers.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join("");
       supSel.value = p && p.supplierId ? p.supplierId : "";
     }
+    $("pf-scpwd").value = p && p.scpwd ? p.scpwd : "";
+    $("pf-orderMultiple").value = p && p.orderMultiple > 1 ? p.orderMultiple : "";
+    $("pf-perishable").checked = !!(p && p.perishable);
     $("pf-threshold").value = p ? (p.threshold != null ? p.threshold : 5) : 5;
     $("pf-barcode").value = p ? (p.barcode || "") : "";
     // Cost/markup figures live in the owner-only productCosts record, not on
@@ -4465,6 +5107,9 @@
     const category = $("pf-category").value.trim() || "Uncategorized";
     const threshold = parseInt($("pf-threshold").value, 10);
     const barcode = $("pf-barcode").value.trim();
+    const scpwd = $("pf-scpwd").value;
+    const orderMultiple = parseInt($("pf-orderMultiple").value, 10);
+    const perishable = $("pf-perishable").checked;
     const cost = parseFloat($("pf-cost").value);
     const opCost = parseFloat($("pf-opcost").value);
     const markup = parseFloat($("pf-markup").value);
@@ -4494,6 +5139,12 @@
       thumb: currentThumbData || null,
       imageCredit: currentImageCredit || null,
       barcode: barcode || null,
+      // Which legal discount this product carries, if any. It sits on the
+      // public product record on purpose: the online store has to work the
+      // same discount out at checkout, and it reveals nothing about cost.
+      scpwd: scpwd || null,
+      orderMultiple: (isFinite(orderMultiple) && orderMultiple > 1) ? orderMultiple : null,
+      perishable: perishable || null,
       cost: firebase.firestore.FieldValue.delete(),
       opCost: firebase.firestore.FieldValue.delete(),
       markup: firebase.firestore.FieldValue.delete(),
@@ -4502,12 +5153,18 @@
       subUnitsPerPack: hasSubUnit ? subUnitsPerPack : null,
       subUnitPrice: hasSubUnit ? subUnitPrice : null
     };
+    const existingCosts = (editingProductId && productCosts[editingProductId]) || {};
     const costData = {
       cost: isNaN(cost) ? null : cost,
       opCost: isNaN(opCost) ? null : opCost,
       markup: isNaN(markup) ? null : markup,
       competitorPrice: isNaN(competitorPrice) ? null : competitorPrice
     };
+    // A cost typed by hand is as much a change as one from a delivery, and
+    // last month's profit should not move because of it.
+    if(!isNaN(cost) && cost > 0){
+      costData.history = costHistoryWith(existingCosts.history, cost, "manual");
+    }
     try{
       let productId = editingProductId;
       if(productId){
@@ -4560,7 +5217,27 @@
     $("adjustProductName").textContent = p.name;
     $("adjustStockInput").value = formatStock(p.stock);
     $("adjustReasonSelect").value = "recount";
+    updateAdjustValueHint();
     openSheet("stockAdjustSheet");
+  }
+
+  // Shows what the change is worth before it's saved. Seeing "this writes off
+  // ₱340" at the moment of typing is the whole point of costing these
+  // movements — a number after the fact changes nothing.
+  function updateAdjustValueHint(){
+    const el = $("adjustValueHint");
+    if(!el) return;
+    const p = products.find(p => p.id === adjustingProductId);
+    const val = parseFloat($("adjustStockInput").value);
+    const unitCost = unitCostOf(adjustingProductId);
+    if(!p || isNaN(val) || unitCost == null){ el.textContent = ""; return; }
+    const delta = val - Number(p.stock);
+    if(Math.abs(delta) < 0.0001){ el.textContent = ""; return; }
+    const value = Math.abs(round2(delta * unitCost));
+    el.textContent = delta < 0
+      ? `Writes off ${peso(value)} of stock at cost.`
+      : `Adds ${peso(value)} of stock at cost.`;
+    el.style.color = delta < 0 ? "var(--danger)" : "var(--text-muted)";
   }
 
   async function saveStockAdjust(){
@@ -4578,12 +5255,20 @@
       // stock update, so it's reported separately.
       if(before !== val){
         try{
+          const unitCost = unitCostOf(adjustingProductId);
+          const delta = Number(val) - Number(before);
           await db.collection("stockLogs").add({
             productId: adjustingProductId,
             productName: p ? p.name : "",
+            category: p ? (p.category || "Uncategorized") : "",
             from: Number(before),
             to: Number(val),
-            delta: Number(val) - Number(before),
+            delta: delta,
+            // What this movement was worth. Recorded at the time of the
+            // change, so a later price or cost revision can't rewrite what
+            // last month's losses cost you.
+            unitCost: unitCost,
+            valueDelta: unitCost != null ? round2(delta * unitCost) : null,
             reason: reason,
             byUid: (auth.currentUser && auth.currentUser.uid) || null,
             byName: currentUserName || "Owner",
@@ -4602,15 +5287,1252 @@
     }
   }
 
+  // ---------- Orders, and checking what arrives against them ----------
+  //
+  // Until now a delivery was recorded from memory: whatever the van brought
+  // was, by definition, what had been ordered. That is fine while you place
+  // every order yourself and remember all of it — and it stops being fine the
+  // first busy week, because a supplier billing for nine sacks and leaving
+  // eight is invisible when there is nothing to compare against.
+  //
+  // An order is a record of what was asked for. It owes nothing and changes
+  // no stock. When the goods arrive it is opened, the real quantities are
+  // typed over the expected ones, and the difference is shown before saving.
+
+  function openOrders(){
+    return purchases
+      .filter(isOrderDoc)
+      .filter(o => o.status !== "received" && o.status !== "cancelled")
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  }
+
+  async function savePlanAsOrder(){
+    const supId = $("buySupplierSelect").value;
+    if(!supId || supId === "__none__"){ showToast("Choose a supplier first"); return; }
+    const su = supplierById(supId);
+    const lines = (lastOrderPlan || [])
+      .filter(pl => pl.funded && pl.suggest > 0 && pl.p.supplierId === supId)
+      .map(pl => ({
+        productId: pl.p.id, name: pl.p.name,
+        qty: pl.suggest,
+        unitCost: pl.m ? pl.m.cost : 0
+      }));
+    if(lines.length === 0){ showToast("Nothing to order from this supplier"); return; }
+    const total = lines.reduce((sum, l) => sum + l.qty * l.unitCost, 0);
+    if(!confirm(`Place an order with ${su ? su.name : "this supplier"}?\n\n${lines.length} item${lines.length !== 1 ? "s" : ""}, about ${peso(total)}.\n\nNothing is owed and no stock moves until you record it as arrived.`)) return;
+    try{
+      await db.collection("purchases").add({
+        type: "order",
+        status: "open",
+        supplierId: supId,
+        supplierName: su ? su.name : "",
+        date: todayISO(),
+        items: lines,
+        total: round2(total),
+        paidAmount: 0,
+        createdAt: new Date().toISOString(),
+        byUid: (auth.currentUser && auth.currentUser.uid) || null
+      });
+      showToast("Order placed");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't save the order");
+    }
+  }
+
+  function renderOpenOrders(){
+    const el = $("openOrdersList");
+    if(!el) return;
+    const list = openOrders();
+    if(list.length === 0){
+      el.innerHTML = `<div style="font-size:13px;color:var(--text-muted);">No orders outstanding. Pick a supplier in the ordering plan above and place one.</div>`;
+      return;
+    }
+    el.innerHTML = list.map((o, i) => `
+      <div style="padding:10px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;gap:10px;">
+          <div style="min-width:0;">
+            <div style="font-weight:700;font-size:13px;">${escapeHtml(o.supplierName || "Supplier")}</div>
+            <div style="color:var(--text-muted);font-size:11px;">Ordered ${escapeHtml(o.date || "")} · ${(o.items || []).length} item${(o.items || []).length !== 1 ? "s" : ""}</div>
+          </div>
+          <div style="text-align:right;white-space:nowrap;font-weight:800;">${peso(Number(o.total) || 0)}</div>
+        </div>
+        <div class="sup-actions" style="margin-top:8px;">
+          <button data-order-receive="${i}">It arrived</button>
+          <button data-order-cancel="${i}">Cancel</button>
+        </div>
+      </div>`).join("");
+
+    el.querySelectorAll("[data-order-receive]").forEach(b => {
+      b.onclick = () => receiveOrder(list[Number(b.dataset.orderReceive)]);
+    });
+    el.querySelectorAll("[data-order-cancel]").forEach(b => {
+      b.onclick = () => cancelOrder(list[Number(b.dataset.orderCancel)]);
+    });
+  }
+
+  function receiveOrder(order){
+    if(!order) return;
+    openDeliverySheet(order.supplierId);
+    // The ordered quantities go in as the starting point. They are meant to be
+    // corrected: what the van brought is what gets recorded, and the gap
+    // between the two is the whole point of having ordered on paper.
+    deliveryLines = (order.items || []).map(l => ({
+      productId: l.productId, name: l.name,
+      qty: l.qty, unitCost: l.unitCost, expiry: null,
+      orderedQty: l.qty
+    }));
+    receivingOrderId = order.id;
+    renderDeliveryLines();
+    showToast("Change any quantity that differs from what actually arrived");
+  }
+
+  async function cancelOrder(order){
+    if(!order) return;
+    if(!confirm(`Cancel the order with ${order.supplierName || "this supplier"}?\n\nIt stays in the record, marked cancelled.`)) return;
+    try{
+      await db.collection("purchases").doc(order.id).update({
+        status: "cancelled",
+        cancelledAt: new Date().toISOString()
+      });
+      showToast("Order cancelled");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't cancel the order");
+    }
+  }
+
+  // ---- Supplier credits ----
+  function openCreditSheet(supplierId){
+    if(suppliers.length === 0){ showToast("Add a supplier first"); return; }
+    fillSupplierSelect($("cr-supplier"), supplierId);
+    $("cr-date").value = todayISO();
+    $("cr-amount").value = "";
+    $("cr-ref").value = "";
+    $("cr-reason").value = "short";
+    openSheet("creditSheet");
+  }
+
+  async function saveCredit(){
+    const sup = supplierById($("cr-supplier").value);
+    if(!sup){ showToast("Choose a supplier"); return; }
+    const amount = parseFloat($("cr-amount").value);
+    if(isNaN(amount) || amount <= 0){ showToast("Enter the amount they owe you back"); return; }
+    try{
+      await db.collection("purchases").add({
+        type: "credit",
+        supplierId: sup.id,
+        supplierName: sup.name,
+        date: $("cr-date").value || todayISO(),
+        // Positive here, subtracted everywhere — the database rules refuse a
+        // negative total, and those rules are worth more than the convenience.
+        total: round2(amount),
+        paidAmount: 0,
+        items: [{ name: "Supplier credit", qty: 1, unitCost: round2(amount) }],
+        reason: $("cr-reason").value,
+        ref: $("cr-ref").value.trim() || null,
+        createdAt: new Date().toISOString(),
+        byUid: (auth.currentUser && auth.currentUser.uid) || null
+      });
+      closeSheet("creditSheet");
+      showToast("Credit recorded — " + peso(amount) + " off their balance");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't record the credit");
+    }
+  }
+
+  // ---- What costs have been doing ----
+  function costChangeRows(){
+    const rows = [];
+    products.forEach(p => {
+      const c = productCosts[p.id];
+      const hist = (c && Array.isArray(c.history)) ? c.history : [];
+      for(let i = 1; i < hist.length; i++){
+        const from = Number(hist[i - 1].cost), to = Number(hist[i].cost);
+        if(!isFinite(from) || !isFinite(to) || from <= 0) continue;
+        rows.push({
+          name: p.name,
+          at: hist[i].at,
+          from, to,
+          pct: ((to - from) / from) * 100,
+          source: hist[i].source || "manual"
+        });
+      }
+    });
+    return rows.sort((a, b) => (b.at || "").localeCompare(a.at || "")).slice(0, 30);
+  }
+
+  function renderCostChanges(){
+    const el = $("costChangeList");
+    if(!el) return;
+    const rows = costChangeRows();
+    if(rows.length === 0){
+      el.innerHTML = `<div style="font-size:13px;color:var(--text-muted);">No cost changes recorded yet. They start appearing once a second delivery of something comes in at a different price.</div>`;
+      return;
+    }
+    el.innerHTML = rows.map(r => `
+      <div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <div style="min-width:0;">
+          <div style="font-weight:700;">${escapeHtml(r.name)}</div>
+          <div style="color:var(--text-muted);font-size:11px;">${new Date(r.at).toLocaleDateString("en-PH")} · ${r.source === "delivery" ? "from a delivery" : "entered by hand"}</div>
+        </div>
+        <div style="text-align:right;white-space:nowrap;">
+          <div style="font-weight:800;color:${r.pct > 0 ? "var(--danger)" : "var(--text)"};">${r.pct > 0 ? "+" : ""}${r.pct.toFixed(1)}%</div>
+          <div style="font-size:11px;color:var(--text-muted);">${peso(r.from)} → ${peso(r.to)}</div>
+        </div>
+      </div>`).join("");
+  }
+
+  // ---------- Things that go off ----------
+  //
+  // Proper batch tracking means every sale picking which lot it came out of,
+  // and every count, return and correction doing the same. That is a different
+  // and much larger machine, and this shop does not need it.
+  //
+  // The trick that avoids it: a delivery records what arrived and when it
+  // expires, and nothing else changes. Today's stock figure is then shared out
+  // across those deliveries NEWEST FIRST — because oldest sells first, so
+  // whatever is left must be the newest. A pack that arrived in June is
+  // treated as gone once enough has sold to have used it up. The sale path is
+  // untouched, the count still rules, and the shelf is still described
+  // correctly: no reconciliation to drift, because there is only one stock
+  // number and the batches merely explain its age.
+
+  const DEFAULT_EXPIRY_WINDOW = 30;
+
+  function expiryWindowDays(){
+    const v = Number(designSettings.expiryWindowDays);
+    return isFinite(v) && v > 0 ? v : DEFAULT_EXPIRY_WINDOW;
+  }
+
+  function daysUntil(dateStr){
+    if(!dateStr) return null;
+    return Math.round((new Date(dateStr + "T00:00:00") - new Date(todayISO() + "T00:00:00")) / 86400000);
+  }
+
+  // Shares the current stock across the recorded deliveries, newest first.
+  // Returns only the batches that still hold something.
+  function openBatches(p){
+    const list = (Array.isArray(p.batches) ? p.batches : [])
+      .filter(b => b && b.expiry && Number(b.qty) > 0)
+      .slice()
+      .sort((a, b) => (a.recv || "") < (b.recv || "") ? -1 : 1);   // oldest first
+    let left = Number(p.stock) || 0;
+    const out = [];
+    for(let i = list.length - 1; i >= 0; i--){
+      if(left <= 0) break;
+      const take = Math.min(left, Number(list[i].qty) || 0);
+      left -= take;
+      out.push(Object.assign({}, list[i], { remaining: round2(take) }));
+    }
+    // Anything still unallocated arrived before the oldest recorded batch, or
+    // came in without a date. It simply isn't dated, so it isn't reported on.
+    return out.sort((a, b) => (a.expiry < b.expiry ? -1 : 1));     // soonest first
+  }
+
+  // Every dated batch still on the shelf, with what it is worth at cost.
+  function expiringSoon(){
+    const window = expiryWindowDays();
+    const rows = [];
+    products.forEach(p => {
+      openBatches(p).forEach(b => {
+        const days = daysUntil(b.expiry);
+        if(days == null || days > window) return;
+        const unitCost = unitCostOf(p.id);
+        rows.push({
+          p, batch: b, days,
+          qty: b.remaining,
+          unitCost,
+          atRisk: unitCost != null ? round2(b.remaining * unitCost) : null
+        });
+      });
+    });
+    // Most money first — that is the order you would work through them in.
+    return rows.sort((a, b) => (b.atRisk || 0) - (a.atRisk || 0));
+  }
+
+  // What it could be sold for and still be worth selling.
+  //
+  // Below cost the sale destroys value, so that is the floor — but a floor is
+  // not advice. Two figures are more useful: the price that still leaves a
+  // little, and the price at which you merely get your money back, which is
+  // the last price worth taking rather than binning it.
+  function markdownFor(p){
+    const m = productMargin(p);
+    if(!m) return null;
+    const floor = m.cost + (m.opCost || 0);
+    const price = Number(p.price) || 0;
+    if(price <= 0) return null;
+    const keepSome = round2(floor * 1.1);
+    return {
+      breakEven: round2(floor),
+      keepSome,
+      breakEvenPct: price > 0 ? Math.max(0, Math.round((1 - floor / price) * 100)) : 0,
+      keepSomePct: price > 0 ? Math.max(0, Math.round((1 - keepSome / price) * 100)) : 0,
+      worthIt: floor < price
+    };
+  }
+
+  function renderExpiring(){
+    const el = $("expiringList");
+    if(!el) return;
+    const input = $("expiryWindowInput");
+    if(input && document.activeElement !== input) input.value = expiryWindowDays();
+
+    const rows = expiringSoon();
+    if(rows.length === 0){
+      const anyDated = products.some(p => openBatches(p).length > 0);
+      el.innerHTML = `<div style="font-size:13px;color:var(--text-muted);">${anyDated
+        ? "Nothing is close to its date."
+        : "No expiry dates recorded yet. Tick \"this goes off\" on a product, then enter the date when its next delivery arrives."}</div>`;
+      return;
+    }
+    const totalRisk = rows.reduce((sum, r) => sum + (r.atRisk || 0), 0);
+    el.innerHTML =
+      `<div class="report-row total" style="margin-bottom:8px;"><span>Money on dated stock</span><span>${peso(totalRisk)}</span></div>` +
+      rows.map((r, i) => {
+        const md = markdownFor(r.p);
+        const gone = r.days < 0;
+        const urgent = r.days <= 7;
+        return `<div style="padding:10px 0;border-bottom:1px solid var(--border);">
+          <div style="display:flex;justify-content:space-between;gap:10px;">
+            <div style="min-width:0;">
+              <div style="font-weight:700;font-size:13px;">${escapeHtml(r.p.name)}</div>
+              <div style="color:${gone ? "var(--danger)" : urgent ? "var(--danger)" : "var(--text-muted)"};font-size:11px;">
+                ${gone ? "Expired " + Math.abs(r.days) + " day" + (Math.abs(r.days) !== 1 ? "s" : "") + " ago" : r.days === 0 ? "Expires today" : "Expires in " + r.days + " day" + (r.days !== 1 ? "s" : "")}
+                · ${escapeHtml(r.batch.expiry)} · ${formatStock(r.qty)} left
+              </div>
+            </div>
+            <div style="text-align:right;white-space:nowrap;">
+              <div style="font-weight:800;">${r.atRisk != null ? peso(r.atRisk) : "cost ?"}</div>
+              <div style="font-size:11px;color:var(--text-muted);">at cost</div>
+            </div>
+          </div>
+          ${!gone && md && md.worthIt ? `<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Now ${peso(r.p.price)} — ${peso(md.keepSome)} (−${md.keepSomePct}%) still leaves a little; ${peso(md.breakEven)} (−${md.breakEvenPct}%) is your money back, and better than the bin.</div>` : ""}
+          <div class="sup-actions" style="margin-top:8px;">
+            <button data-expiry-writeoff="${i}">Write it off</button>
+          </div>
+        </div>`;
+      }).join("");
+
+    el.querySelectorAll("[data-expiry-writeoff]").forEach(b => {
+      b.onclick = () => writeOffBatch(rows[Number(b.dataset.expiryWriteoff)]);
+    });
+  }
+
+  // One tap from "this is finished" to a costed, permanent loss entry — the
+  // same log a count writes to, so spoilage and shrinkage are counted the same
+  // way and appear side by side in the quarter's loss report.
+  async function writeOffBatch(row){
+    if(!row) return;
+    const p = row.p;
+    const qty = row.qty;
+    if(!confirm(
+      `Write off ${formatStock(qty)} of ${p.name}?\n\n` +
+      (row.atRisk != null ? `That is ${peso(row.atRisk)} at cost.\n\n` : "") +
+      `Stock drops and the loss is recorded permanently. This can't be undone.`
+    )) return;
+    const before = Number(p.stock) || 0;
+    const after = round2(Math.max(0, before - qty));
+    try{
+      const batch = db.batch();
+      batch.update(db.collection("products").doc(p.id), { stock: after });
+      batch.set(db.collection("stockLogs").doc(), {
+        productId: p.id,
+        productName: p.name,
+        category: p.category || "Uncategorized",
+        from: before, to: after, delta: round2(after - before),
+        unitCost: row.unitCost,
+        valueDelta: row.unitCost != null ? round2((after - before) * row.unitCost) : null,
+        reason: "spoiled",
+        expiry: row.batch.expiry,
+        byUid: (auth.currentUser && auth.currentUser.uid) || null,
+        byName: currentUserName || "Owner",
+        timestamp: new Date().toISOString()
+      });
+      await batch.commit();
+      showToast("Written off" + (row.atRisk != null ? " — " + peso(row.atRisk) : ""));
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't write it off");
+    }
+  }
+
+  async function saveExpiryWindow(){
+    const v = parseInt($("expiryWindowInput").value, 10);
+    if(!isFinite(v) || v < 1) return;
+    try{
+      await db.collection("settings").doc("design").set({ expiryWindowDays: v }, { merge: true });
+    }catch(err){ console.error(err); }
+  }
+
+  // ---------- Returns, refunds and voids ----------
+  //
+  // Nothing here edits a sale. The original stays exactly as it was rung —
+  // that is what the immutability rule is for — and a separate credit document
+  // is recorded against it. Both stay visible, which is the point: a shop
+  // where mistakes vanish is a shop where you cannot tell a mistake from a
+  // theft.
+  //
+  // The credit always lands on TODAY, never on the day of the original sale.
+  // A sealed day cannot be written into, and back-dating a refund into a
+  // closed day would break the Z-reading that already balanced. So a refund
+  // for last week's sale appears as a negative in today's takings, which is
+  // also how the cash actually moved.
+
+  const RETURN_REASON_LABELS = {
+    mistake: "Rung up by mistake",
+    changed: "Customer changed their mind",
+    wrong: "Wrong item given",
+    damaged: "Damaged or spoiled",
+    other: "Other"
+  };
+
+  let returningSale = null;
+  let returnQty = {};   // line index -> qty being returned
+
+  // Returns are a control, so who may record one is a setting, not a guess.
+  // Left on for the owner always; staff only when the owner allows it.
+  function canRecordReturns(){
+    if(isOwnerAccount()) return true;
+    if(currentUserRole === "manager") return designSettings.returnsByStaff !== false;
+    return designSettings.returnsByStaff === true;
+  }
+
+  function returnsAgainst(saleId){
+    return sales.filter(s => isReturnDoc(s) && s.refSaleId === saleId);
+  }
+
+  // How many of each line are still available to return, after any earlier
+  // credit against the same sale.
+  function returnableLines(sale){
+    const credited = {};
+    returnsAgainst(sale.id).forEach(r => {
+      (r.items || []).forEach(it => {
+        const k = it.productId + "|" + (it.unit || "pack");
+        credited[k] = (credited[k] || 0) + (Number(it.qty) || 0);
+      });
+    });
+    return (sale.items || []).map((it, i) => {
+      const k = it.productId + "|" + (it.unit || "pack");
+      const already = credited[k] || 0;
+      const left = Math.max(0, (Number(it.qty) || 0) - already);
+      credited[k] = Math.max(0, already - (Number(it.qty) || 0));
+      return { i, it, left };
+    });
+  }
+
+  function openReturnSheet(saleId){
+    const sale = sales.find(x => x.id === saleId);
+    if(!sale) return;
+    if(!canRecordReturns()){ showToast("Only the owner can record a return"); return; }
+    returningSale = sale;
+    returnQty = {};
+    const sameOpenDay = businessDateOf(sale) === todayISO() && !dayIsClosed(todayISO());
+    $("returnTitle").textContent = sameOpenDay ? "Void or return" : "Refund or return";
+    $("returnIntro").textContent = sameOpenDay
+      ? "Invoice " + formatInvoiceNumber(sale.invoiceNumber || 0) + ", rung today. Set the quantity coming back — all of it voids the sale."
+      : "Invoice " + formatInvoiceNumber(sale.invoiceNumber || 0) + " from " + businessDateOf(sale) + ". That day is finished, so this is recorded as a refund against today.";
+    $("rt-reason").value = "mistake";
+    $("rt-restock").value = "yes";
+    $("rt-method").value = "cash";
+    $("rt-note").value = "";
+    renderReturnLines();
+    closeSheet("saleDetailSheet");
+    openSheet("returnSheet");
+  }
+
+  function renderReturnLines(){
+    const wrap = $("returnLines");
+    if(!wrap || !returningSale) return;
+    const lines = returnableLines(returningSale);
+    wrap.innerHTML = "";
+    lines.forEach(({ i, it, left }) => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);";
+      const unitLabel = it.unit === "sub" ? " per piece" : "";
+      row.innerHTML = `
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(it.name || "")}</div>
+          <div style="color:var(--text-muted);font-size:11px;">${it.qty} sold at ${peso(it.price)}${unitLabel}${left < it.qty ? " · " + (it.qty - left) + " already credited" : ""}</div>
+        </div>
+        <input type="number" inputmode="decimal" step="any" min="0" max="${left}" placeholder="0"
+          style="width:78px;flex:none;" data-return-i="${i}" value="${returnQty[i] != null ? escapeHtml(String(returnQty[i])) : ""}" ${left <= 0 ? "disabled" : ""}>
+      `;
+      const input = row.querySelector("[data-return-i]");
+      input.oninput = () => {
+        let v = parseFloat(input.value);
+        if(isNaN(v) || v < 0) v = 0;
+        if(v > left){ v = left; input.value = left; }
+        returnQty[i] = v;
+        renderReturnSummary();
+      };
+      wrap.appendChild(row);
+    });
+    renderReturnSummary();
+  }
+
+  function returnDraft(){
+    if(!returningSale) return { items: [], amount: 0, full: false };
+    const items = [];
+    let amount = 0;
+    (returningSale.items || []).forEach((it, i) => {
+      const q = Number(returnQty[i]) || 0;
+      if(q <= 0) return;
+      items.push({
+        productId: it.productId, name: it.name, price: it.price,
+        qty: q, unit: it.unit || "pack", perPack: it.perPack || 1
+      });
+      amount += (Number(it.price) || 0) * q;
+    });
+    // A discount granted on the original is given back in the same proportion,
+    // so refunding half a basket refunds half the discount too.
+    const sd = returningSale.discount;
+    const originalGross = returningSale.subtotal != null
+      ? Number(returningSale.subtotal)
+      : (Number(returningSale.total) || 0) + ((sd && sd.amount) || 0);
+    let discountBack = 0;
+    if(sd && sd.amount > 0 && originalGross > 0){
+      discountBack = round2(sd.amount * (amount / originalGross));
+    }
+    const full = (returningSale.items || []).every((it, i) => (Number(returnQty[i]) || 0) >= (Number(it.qty) || 0));
+    return { items, gross: round2(amount), discountBack, amount: round2(amount - discountBack), full };
+  }
+
+  function renderReturnSummary(){
+    const el = $("returnSummary");
+    if(!el) return;
+    const d = returnDraft();
+    if(d.items.length === 0){
+      el.innerHTML = `<div class="report-row"><span>Nothing selected to return yet.</span></div>`;
+      return;
+    }
+    let html = `<div class="report-row"><span>${d.items.length} line${d.items.length !== 1 ? "s" : ""} coming back</span><span>${peso(d.gross)}</span></div>`;
+    if(d.discountBack > 0) html += `<div class="report-row"><span>Discount given back</span><span>−${peso(d.discountBack)}</span></div>`;
+    html += `<div class="report-row total"><span>${d.full ? "Full reversal" : "Partial refund"}</span><span>${peso(d.amount)}</span></div>`;
+    el.innerHTML = html;
+  }
+
+  async function getNextCreditNumber(){
+    const ref = db.collection("counters").doc("credit");
+    let num;
+    await db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      const current = doc.exists ? (doc.data().value || 0) : 0;
+      num = current + 1;
+      tx.set(ref, { value: num });
+    });
+    return num;
+  }
+
+  async function saveReturn(){
+    if(!returningSale) return;
+    const today = todayISO();
+    if(dayIsClosed(today)){ showToast("Today is closed — a return has to wait for tomorrow"); return; }
+    if(!navigator.onLine){ showToast("Offline — wait for a signal before recording a return"); return; }
+    const d = returnDraft();
+    if(d.items.length === 0){ showToast("Set how many are coming back"); return; }
+
+    const restock = $("rt-restock").value === "yes";
+    const reason = $("rt-reason").value;
+    const method = $("rt-method").value;
+
+    if(!confirm(
+      (d.full ? "Reverse this sale in full?" : "Refund part of this sale?") +
+      "\n\n" + peso(d.amount) + (method === "none" ? " credited, no money moving." : method === "gcash" ? " to be sent back by GCash." : " to come out of the drawer.") +
+      (restock ? "\nThe goods go back into stock." : "\nThe goods do NOT go back into stock.") +
+      "\n\nThis can't be undone."
+    )) return;
+
+    const btn = $("saveReturnBtn");
+    btn.disabled = true;
+    let creditNumber;
+    try{
+      creditNumber = await getNextCreditNumber();
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't get a credit number — try again");
+      btn.disabled = false;
+      return;
+    }
+
+    try{
+      const batch = db.batch();
+      batch.set(db.collection("sales").doc(), {
+        type: "return",
+        timestamp: new Date().toISOString(),
+        businessDate: today,
+        creditNumber,
+        // The rules require an invoiceNumber, and a credit document must not
+        // consume one from the sales series — so the credit number stands in
+        // here, and everything shown or exported prints it as CN-000000.
+        invoiceNumber: creditNumber,
+        refSaleId: returningSale.id,
+        refInvoice: returningSale.invoiceNumber || null,
+        refDate: businessDateOf(returningSale),
+        items: d.items,
+        subtotal: d.gross,
+        discountBack: d.discountBack,
+        total: d.amount,
+        reason,
+        restocked: restock,
+        refundMethod: method,
+        note: $("rt-note").value.trim() || null,
+        source: returningSale.source === "online" ? "online" : "pos",
+        cashierName: currentUserName || null,
+        cashierUid: (auth.currentUser && auth.currentUser.uid) || null
+      });
+
+      if(restock){
+        const deltas = {};
+        d.items.forEach(it => {
+          const packs = it.unit === "sub" ? (it.qty / (it.perPack || 1)) : it.qty;
+          deltas[it.productId] = (deltas[it.productId] || 0) + packs;
+        });
+        Object.keys(deltas).forEach(pid => {
+          batch.update(db.collection("products").doc(pid), {
+            stock: firebase.firestore.FieldValue.increment(deltas[pid])
+          });
+          const p = products.find(x => x.id === pid);
+          const unitCost = unitCostOf(pid);
+          // Goods coming back are a stock movement like any other, and belong
+          // in the same permanent log — otherwise the shelf count would change
+          // with nothing to explain it.
+          batch.set(db.collection("stockLogs").doc(), {
+            productId: pid,
+            productName: p ? p.name : "",
+            category: p ? (p.category || "Uncategorized") : "",
+            from: p ? Number(p.stock) || 0 : 0,
+            to: (p ? Number(p.stock) || 0 : 0) + deltas[pid],
+            delta: deltas[pid],
+            unitCost: unitCost,
+            valueDelta: unitCost != null ? round2(deltas[pid] * unitCost) : null,
+            reason: "returned",
+            creditNumber,
+            byUid: (auth.currentUser && auth.currentUser.uid) || null,
+            byName: currentUserName || "Owner",
+            timestamp: new Date().toISOString()
+          });
+        });
+      }
+
+      await batch.commit();
+      closeSheet("returnSheet");
+      returningSale = null;
+      returnQty = {};
+      showToast("Recorded — CN-" + String(creditNumber).padStart(6, "0"));
+    }catch(err){
+      console.error(err);
+      // The number was already taken. Say so, because the credit sequence now
+      // has a hole in it and that is exactly the kind of thing an examiner
+      // asks about.
+      showToast("Couldn't record the return. Credit number CN-" + String(creditNumber).padStart(6, "0") + " was used up — note it for your books.");
+    }
+    btn.disabled = false;
+  }
+
+  // ---------- The business day: X-reading, Z-reading, drawer count ----------
+  //
+  // A till that never closes has no accountability. Until the day is shut and
+  // totalled, "how much did we take" is a question with a moving answer, and
+  // cash short is invisible because there is nothing to be short against.
+  //
+  // X-reading totals the day so far and changes nothing — it can be taken any
+  // number of times. Z-reading closes the day: it totals it, records what was
+  // counted in the drawer against what should be there, and seals the date so
+  // that nothing can ever be recorded into it again. That sealing is enforced
+  // by the database rules as well as here, because a lock only the app obeys
+  // is not a lock.
+  //
+  // Both are keyed on the business date, which is also the document id — so a
+  // day cannot be closed twice, and "is this day closed?" is one lookup.
+
+  function openingFor(date){ return dayOpenings.find(d => d.id === date) || null; }
+  function closingFor(date){ return dayClosings.find(d => d.id === date) || null; }
+  function dayIsClosed(date){ return !!closingFor(date); }
+
+  function businessDateOf(sale){
+    if(sale.businessDate) return sale.businessDate;
+    return (sale.timestamp || "").slice(0, 10);   // older sales predate the field
+  }
+
+  function salesForDay(date){
+    return sales.filter(s => businessDateOf(s) === date);
+  }
+
+  // Everything the two readings need, worked out the same way for both so an
+  // X-reading and the Z that follows it can never disagree.
+  function dayTotals(date){
+    const list = salesForDay(date).slice().sort((a, b) => (a.invoiceNumber || 0) - (b.invoiceNumber || 0));
+    let gross = 0, discount = 0, net = 0, cash = 0, gcash = 0, online = 0, returns = 0, returnCount = 0;
+    list.forEach(s => {
+      const sign = saleSign(s);
+      const d = sign * ((s.discount && s.discount.amount) || 0);
+      const raw = Number(s.total) || 0;
+      const t = sign * raw;
+      gross += sign * (s.subtotal != null ? Number(s.subtotal) : raw + Math.abs(d));
+      discount += d;
+      net += t;
+      if(isReturnDoc(s)){ returns += raw; returnCount++; }
+      if(s.source === "online") online += t;
+      else if((isReturnDoc(s) ? s.refundMethod : s.payment) === "gcash") gcash += t;
+      else cash += t;
+    });
+    const opening = openingFor(date);
+    const float = opening ? (Number(opening.float) || 0) : 0;
+    return {
+      date, list,
+      count: list.length,
+      gross: round2(gross), discount: round2(discount), net: round2(net),
+      cash: round2(cash), gcash: round2(gcash), online: round2(online),
+      returns: round2(returns), returnCount,
+      float: round2(float),
+      // Only counter cash reaches the drawer. GCash never does, and an online
+      // order was settled away from the till, so counting them here would
+      // manufacture a shortage every single night.
+      expectedCash: round2(float + cash),
+      invFrom: list.length ? list[0].invoiceNumber : null,
+      invTo: list.length ? list[list.length - 1].invoiceNumber : null
+    };
+  }
+
+  function renderDayCard(){
+    const el = $("daySummary");
+    if(!el) return;
+    const date = todayISO();
+    const closed = closingFor(date);
+    const opening = openingFor(date);
+    const t = dayTotals(date);
+    const btn = $("dayActionBtn");
+
+    if(closed){
+      el.innerHTML =
+        `<div class="report-row" style="font-weight:800;"><span>Closed — Z-reading ${escapeHtml(String(closed.zNumber || "").padStart(5, "0"))}</span></div>` +
+        `<div class="report-row"><span>${t.count} sale${t.count !== 1 ? "s" : ""}</span><span>${peso(t.net)}</span></div>` +
+        `<div class="report-row"><span>Drawer</span><span>${closed.variance === 0 ? "matched" : (closed.variance > 0 ? peso(closed.variance) + " over" : peso(Math.abs(closed.variance)) + " short")}</span></div>`;
+      if(btn){ btn.textContent = "Day already closed"; btn.disabled = true; }
+      return;
+    }
+
+    let html = "";
+    if(!opening){
+      html += `<div class="report-row"><span>Not opened yet — no float recorded</span></div>`;
+    } else {
+      html += `<div class="report-row"><span>Opening float</span><span>${peso(t.float)}</span></div>`;
+    }
+    html += `<div class="report-row"><span>${t.count - t.returnCount} sale${(t.count - t.returnCount) !== 1 ? "s" : ""} so far</span><span>${peso(t.net + t.returns)}</span></div>`;
+    if(t.returnCount > 0) html += `<div class="report-row" style="color:var(--danger);"><span>${t.returnCount} return${t.returnCount !== 1 ? "s" : ""}</span><span>−${peso(t.returns)}</span></div>`;
+    if(t.gcash > 0) html += `<div class="report-row"><span>of which GCash</span><span>${peso(t.gcash)}</span></div>`;
+    if(t.online > 0) html += `<div class="report-row"><span>of which online orders</span><span>${peso(t.online)}</span></div>`;
+    html += `<div class="report-row total"><span>Drawer should hold</span><span>${peso(t.expectedCash)}</span></div>`;
+    el.innerHTML = html;
+
+    if(btn){
+      btn.disabled = false;
+      btn.textContent = opening ? "Close the day" : "Open the day";
+    }
+  }
+
+  function dayActionTapped(){
+    const date = todayISO();
+    if(dayIsClosed(date)) return;
+    if(openingFor(date)) openCloseDaySheet();
+    else { $("od-float").value = ""; openSheet("openDaySheet"); }
+  }
+
+  async function saveOpenDay(){
+    const val = parseFloat($("od-float").value);
+    if(isNaN(val) || val < 0){ showToast("Enter the opening float"); return; }
+    const date = todayISO();
+    if(openingFor(date)){ showToast("The day is already open"); closeSheet("openDaySheet"); return; }
+    try{
+      await db.collection("dayOpenings").doc(date).set({
+        date,
+        float: round2(val),
+        byUid: (auth.currentUser && auth.currentUser.uid) || null,
+        byName: currentUserName || "Owner",
+        openedAt: new Date().toISOString()
+      });
+      closeSheet("openDaySheet");
+      showToast("Day opened");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't open the day");
+    }
+  }
+
+  function openCloseDaySheet(){
+    const t = dayTotals(todayISO());
+    const hasOpening = !!openingFor(todayISO());
+    $("closeFloatField").style.display = hasOpening ? "none" : "block";
+    $("cd-float").value = "";
+    $("cd-counted").value = "";
+    $("cd-note").value = "";
+    $("closeDayExpected").innerHTML =
+      `<div class="report-row"><span>Sales</span><span>${t.count}</span></div>` +
+      `<div class="report-row"><span>Counter cash</span><span>${peso(t.cash)}</span></div>` +
+      (t.gcash > 0 ? `<div class="report-row"><span>GCash (not in the drawer)</span><span>${peso(t.gcash)}</span></div>` : "") +
+      (t.online > 0 ? `<div class="report-row"><span>Online orders (not in the drawer)</span><span>${peso(t.online)}</span></div>` : "") +
+      (hasOpening ? `<div class="report-row"><span>Opening float</span><span>${peso(t.float)}</span></div>` : "") +
+      `<div class="report-row total"><span>Drawer should hold</span><span>${peso(t.expectedCash)}</span></div>`;
+    updateCloseVariance();
+    openSheet("closeDaySheet");
+  }
+
+  function closeExpectedCash(){
+    const t = dayTotals(todayISO());
+    if(openingFor(todayISO())) return t.expectedCash;
+    const manual = parseFloat($("cd-float").value);
+    return round2((isNaN(manual) ? 0 : manual) + t.cash);
+  }
+
+  function updateCloseVariance(){
+    const el = $("closeDayVariance");
+    if(!el) return;
+    const counted = parseFloat($("cd-counted").value);
+    if(isNaN(counted)){ el.innerHTML = `<div class="report-row"><span>Count the drawer to see the difference.</span></div>`; return; }
+    const variance = round2(counted - closeExpectedCash());
+    if(Math.abs(variance) < 0.005){
+      el.innerHTML = `<div class="report-row total"><span>Drawer matches exactly</span><span>${peso(counted)}</span></div>`;
+    } else {
+      el.innerHTML = `<div class="report-row total" style="color:${variance < 0 ? "var(--danger)" : "var(--text)"};"><span>${variance < 0 ? "Short" : "Over"}</span><span>${peso(Math.abs(variance))}</span></div>`;
+    }
+  }
+
+  async function getNextZNumber(){
+    const ref = db.collection("counters").doc("zreading");
+    let num;
+    await db.runTransaction(async (tx) => {
+      const doc = await tx.get(ref);
+      const current = doc.exists ? (doc.data().value || 0) : 0;
+      num = current + 1;
+      tx.set(ref, { value: num });
+    });
+    return num;
+  }
+
+  async function saveCloseDay(){
+    const date = todayISO();
+    if(dayIsClosed(date)){ showToast("This day is already closed"); closeSheet("closeDaySheet"); return; }
+    // Sales rung with no signal sit on the phone until it reconnects, and the
+    // database checks the day lock at THAT moment — so closing while anything
+    // is unsent would have those sales refused and silently lost, after the
+    // goods had already gone out of the door. Closing waits for the signal.
+    if(!navigator.onLine){
+      showToast("No signal — wait until the app is back online before closing, or today's unsent sales will be refused");
+      return;
+    }
+    const counted = parseFloat($("cd-counted").value);
+    if(isNaN(counted) || counted < 0){ showToast("Count the drawer first"); return; }
+    const hasOpening = !!openingFor(date);
+    const manualFloat = parseFloat($("cd-float").value);
+    if(!hasOpening && (isNaN(manualFloat) || manualFloat < 0)){ showToast("Enter this morning's float"); return; }
+
+    const t = dayTotals(date);
+    const float = hasOpening ? t.float : round2(manualFloat);
+    const expected = round2(float + t.cash);
+    const variance = round2(counted - expected);
+
+    if(!confirm(
+      `Close ${date}?\n\n${t.count} sale${t.count !== 1 ? "s" : ""}, ${peso(t.net)} taken.\n` +
+      (Math.abs(variance) < 0.005 ? "Drawer matches." : (variance < 0 ? "Drawer is " + peso(Math.abs(variance)) + " SHORT." : "Drawer is " + peso(variance) + " over.")) +
+      `\n\nNothing can be recorded into this day afterwards.`
+    )) return;
+
+    const btn = $("saveCloseDayBtn");
+    btn.disabled = true;
+    let zNumber;
+    try{
+      zNumber = await getNextZNumber();
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't get a Z number — try again");
+      btn.disabled = false;
+      return;
+    }
+    try{
+      await db.collection("dayClosings").doc(date).set({
+        date, zNumber,
+        saleCount: t.count,
+        gross: t.gross, discount: t.discount, net: t.net,
+        cash: t.cash, gcash: t.gcash, online: t.online,
+        openingFloat: float,
+        expectedCash: expected,
+        countedCash: round2(counted),
+        variance,
+        invoiceFrom: t.invFrom, invoiceTo: t.invTo,
+        note: $("cd-note").value.trim() || null,
+        byUid: (auth.currentUser && auth.currentUser.uid) || null,
+        byName: currentUserName || "Owner",
+        closedAt: new Date().toISOString()
+      });
+      closeSheet("closeDaySheet");
+      showReading(date, true);
+      showToast("Day closed — Z" + String(zNumber).padStart(5, "0"));
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't close the day");
+    }
+    btn.disabled = false;
+  }
+
+  // ---- The readings themselves ----
+  let readingDate = null;
+
+  function readingLines(date, isZ){
+    const t = dayTotals(date);
+    const z = closingFor(date);
+    const L = [];
+    L.push((bizSettings.name || "GROCERY STORE"));
+    if(bizSettings.address) L.push(bizSettings.address);
+    if(bizSettings.tin) L.push("TIN: " + bizSettings.tin);
+    L.push(taxTypeLabel(bizSettings.taxType));
+    L.push("");
+    L.push(isZ ? "Z-READING" : "X-READING");
+    if(isZ && z) L.push("No. " + String(z.zNumber || 0).padStart(5, "0"));
+    L.push("Business date: " + date);
+    L.push("Printed: " + new Date().toLocaleString("en-PH"));
+    L.push("--------------------------------");
+    L.push("Sales               " + String(t.count).padStart(12, " "));
+    if(t.invFrom != null) L.push("Invoices  " + formatInvoiceNumber(t.invFrom) + " - " + formatInvoiceNumber(t.invTo));
+    L.push("--------------------------------");
+    L.push("Gross               " + peso(t.gross + t.returns).padStart(12, " "));
+    if(t.returnCount > 0) L.push("Returns (" + t.returnCount + ")" + ("-" + peso(t.returns)).padStart(24 - String(t.returnCount).length, " "));
+    L.push("SC/PWD discounts    " + ("-" + peso(t.discount)).padStart(12, " "));
+    L.push("NET SALES           " + peso(t.net).padStart(12, " "));
+    L.push("--------------------------------");
+    L.push("Counter cash        " + peso(t.cash).padStart(12, " "));
+    L.push("GCash               " + peso(t.gcash).padStart(12, " "));
+    L.push("Online orders       " + peso(t.online).padStart(12, " "));
+    L.push("--------------------------------");
+    const float = z ? (Number(z.openingFloat) || 0) : t.float;
+    const expected = z ? Number(z.expectedCash) : t.expectedCash;
+    L.push("Opening float       " + peso(float).padStart(12, " "));
+    L.push("Drawer should hold  " + peso(expected).padStart(12, " "));
+    if(isZ && z){
+      L.push("Drawer counted      " + peso(Number(z.countedCash)).padStart(12, " "));
+      const v = Number(z.variance) || 0;
+      L.push((v < 0 ? "SHORT" : v > 0 ? "OVER" : "Difference").padEnd(20, " ") + peso(Math.abs(v)).padStart(12, " "));
+      if(z.note) L.push("Note: " + z.note);
+      L.push("Closed by " + (z.byName || "?"));
+    } else {
+      L.push("(X-reading changes nothing)");
+    }
+    if(bizSettings.accreditation) L.push(bizSettings.accreditation);
+    return L;
+  }
+
+  function showReading(date, isZ){
+    readingDate = date;
+    $("readingTitle").textContent = isZ ? "Z-reading" : "X-reading";
+    $("readingContent").innerHTML = readingLines(date, isZ)
+      .map(l => `<div style="white-space:pre-wrap;">${escapeHtml(l) || "&nbsp;"}</div>`).join("");
+    openSheet("readingSheet");
+  }
+
+  function printReading(){
+    const isZ = $("readingTitle").textContent === "Z-reading";
+    const lines = readingLines(readingDate || todayISO(), isZ);
+    if(btPrinterCharacteristic){
+      const bytes = [0x1B, 0x40, 0x1B, 0x74, 0x00];
+      lines.forEach(l => { escposBytes(l + "\n").forEach(b => bytes.push(b)); });
+      [0x0A, 0x0A, 0x0A, 0x1D, 0x56, 0x00].forEach(b => bytes.push(b));
+      const data = new Uint8Array(bytes);
+      (async () => {
+        try{
+          for(let i = 0; i < data.length; i += 180) await btPrinterCharacteristic.writeValue(data.slice(i, i + 180));
+          showToast("Sent to printer");
+        }catch(e){ console.error(e); showToast("Couldn't send to printer"); }
+      })();
+      return;
+    }
+    printTableReport(isZ ? "Z-Reading" : "X-Reading", ["Line"], lines.map(l => [l]));
+  }
+
+  // ---- The daily e-Journal ----
+  //
+  // A day, as plain text: every invoice with its items, the discounts, and the
+  // reading that closed it. Deliberately not a PDF — BIR asks for the journal
+  // in a form that can be read and checked, and a picture of a report isn't it.
+  function journalText(date){
+    const t = dayTotals(date);
+    const z = closingFor(date);
+    const out = [];
+    out.push("DAILY ELECTRONIC JOURNAL");
+    out.push((bizSettings.name || "GROCERY STORE") + (bizSettings.tin ? "   TIN: " + bizSettings.tin : ""));
+    if(bizSettings.address) out.push(bizSettings.address);
+    out.push(taxTypeLabel(bizSettings.taxType));
+    if(bizSettings.accreditation) out.push(bizSettings.accreditation);
+    out.push("Business date: " + date);
+    out.push("Generated: " + new Date().toISOString());
+    out.push("");
+    if(t.list.length === 0) out.push("(no sales recorded on this date)");
+    t.list.forEach(s => {
+      out.push("================================");
+      out.push((isReturnDoc(s) ? "CREDIT " : "INVOICE ") + docNumberOf(s) + "   " + new Date(s.timestamp).toLocaleString("en-PH"));
+      if(isReturnDoc(s)) out.push("Against invoice " + formatInvoiceNumber(s.refInvoice || 0) + " of " + (s.refDate || "?") + " — " + (RETURN_REASON_LABELS[s.reason] || "Other") + (s.restocked ? ", returned to stock" : ", not returned to stock"));
+      out.push("Cashier: " + (s.cashierName || "-") + "   Source: " + (s.source === "online" ? "online order" : "counter") + "   Paid: " + (s.source === "online" ? "online" : (s.payment === "gcash" ? "GCash" : "cash")));
+      (s.items || []).forEach(it => {
+        out.push("  " + (it.name || "") + "  x" + it.qty + " @ " + peso(it.price) + " = " + peso((Number(it.price) || 0) * (Number(it.qty) || 0)));
+      });
+      const d = s.discount;
+      if(d && d.amount > 0){
+        out.push("  Subtotal: " + peso(s.subtotal != null ? s.subtotal : s.total + d.amount));
+        out.push("  " + scpwdKindLabel(d.kind) + " discount: -" + peso(d.amount) + "  (" + (d.name || "") + ", ID " + (d.idNumber || "") + (d.booklet ? ", booklet " + d.booklet : "") + ")");
+      }
+      out.push((isReturnDoc(s) ? "  REFUNDED: -" : "  TOTAL: ") + peso(s.total));
+    });
+    out.push("");
+    out.push("================================");
+    readingLines(date, !!z).forEach(l => out.push(l));
+    return out.join("\n");
+  }
+
+  function downloadJournal(date){
+    const t = dayTotals(date);
+    if(t.count === 0 && !closingFor(date)){ showToast("Nothing recorded on that date"); return; }
+    const blob = new Blob([journalText(date)], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "ejournal-" + date + ".txt";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("e-Journal downloaded");
+  }
+
+  function renderZHistory(){
+    const el = $("zHistoryList");
+    if(!el) return;
+    if(dayClosings.length === 0){
+      el.innerHTML = `<div style="font-size:13px;color:var(--text-muted);">No day has been closed yet.</div>`;
+      return;
+    }
+    el.innerHTML = dayClosings.slice(0, 14).map(z => {
+      const v = Number(z.variance) || 0;
+      return `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <div style="min-width:0;">
+          <div style="font-weight:700;">${escapeHtml(z.id)} · Z${escapeHtml(String(z.zNumber || "").padStart(5, "0"))}</div>
+          <div style="color:var(--text-muted);font-size:11px;">${z.saleCount || 0} sales · closed by ${escapeHtml(z.byName || "?")}</div>
+        </div>
+        <div style="text-align:right;white-space:nowrap;">
+          <div style="font-weight:800;">${peso(Number(z.net) || 0)}</div>
+          <div style="font-size:11px;color:${Math.abs(v) < 0.005 ? "var(--text-muted)" : "var(--danger)"};">${Math.abs(v) < 0.005 ? "drawer matched" : (v < 0 ? peso(Math.abs(v)) + " short" : peso(v) + " over")}</div>
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  // ---------- Counting stock ----------
+  //
+  // Shrinkage is a difference from a known figure, so it cannot be seen at all
+  // until something compares the shelf against the record. This is that
+  // something. It is deliberately a count of one category at a time rather
+  // than the whole shop: a count you can finish in ten minutes gets done every
+  // week, and a weekly count of the fast movers catches more than an annual
+  // count of everything.
+  //
+  // Each difference becomes an ordinary entry in the same append-only log as a
+  // manual correction, tagged with the count it came from — so a count can
+  // never be quietly revised afterwards either.
+  let countDraft = {};   // productId -> typed value (string)
+  let countScope = "";
+
+  function countScopeOptions(){
+    const cats = Array.from(new Set(products.map(p => p.category || "Uncategorized"))).sort();
+    return [{ value: "__fast__", label: "Ten fastest movers" }]
+      .concat(cats.map(c => ({ value: c, label: c })));
+  }
+
+  function countProductsFor(scope){
+    if(scope === "__fast__"){
+      return products
+        .map(p => ({ p, v: velocityFor(p.id) }))
+        .sort((a,b) => b.v - a.v)
+        .slice(0, 10)
+        .map(x => x.p);
+    }
+    return products.filter(p => (p.category || "Uncategorized") === scope);
+  }
+
+  function openCountSheet(){
+    if(products.length === 0){ showToast("No products to count yet"); return; }
+    const opts = countScopeOptions();
+    countScope = opts[0].value;
+    countDraft = {};
+    $("countScopeSelect").innerHTML = opts.map(o => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join("");
+    $("countScopeSelect").value = countScope;
+    renderCountList();
+    openSheet("countSheet");
+  }
+
+  function renderCountList(){
+    const wrap = $("countList");
+    const list = countProductsFor(countScope);
+    wrap.innerHTML = "";
+    if(list.length === 0){
+      wrap.innerHTML = `<div style="font-size:13px;color:var(--text-muted);">Nothing in this group.</div>`;
+      renderCountSummary();
+      return;
+    }
+    list.forEach(p => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);";
+      row.innerHTML = `
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(p.name)}</div>
+          <div style="color:var(--text-muted);font-size:11px;">Record says ${formatStock(p.stock)}</div>
+        </div>
+        <input type="number" inputmode="decimal" step="any" min="0" placeholder="count"
+          style="width:84px;flex:none;" data-count-id="${p.id}" value="${countDraft[p.id] != null ? escapeHtml(countDraft[p.id]) : ""}">
+      `;
+      const input = row.querySelector("[data-count-id]");
+      input.oninput = () => {
+        countDraft[p.id] = input.value;
+        renderCountSummary();
+      };
+      wrap.appendChild(row);
+    });
+    renderCountSummary();
+  }
+
+  // Shortages and overages are shown apart, never netted. A shop that is
+  // 12 short on rice and 12 over on sugar has two problems, not none.
+  function countVariances(){
+    const out = [];
+    Object.keys(countDraft).forEach(id => {
+      const raw = countDraft[id];
+      if(raw === "" || raw == null) return;
+      const counted = parseFloat(raw);
+      if(isNaN(counted) || counted < 0) return;
+      const p = products.find(x => x.id === id);
+      if(!p) return;
+      const delta = round2(counted - Number(p.stock));
+      if(Math.abs(delta) < 0.0001) return;
+      const unitCost = unitCostOf(id);
+      out.push({
+        product: p,
+        counted: counted,
+        expected: Number(p.stock),
+        delta: delta,
+        unitCost: unitCost,
+        valueDelta: unitCost != null ? round2(delta * unitCost) : null
+      });
+    });
+    return out;
+  }
+
+  function renderCountSummary(){
+    const el = $("countSummary");
+    if(!el) return;
+    const vars = countVariances();
+    const entered = Object.keys(countDraft).filter(k => countDraft[k] !== "" && countDraft[k] != null).length;
+    if(entered === 0){
+      el.innerHTML = `<div class="report-row"><span>Nothing counted yet.</span></div>`;
+      return;
+    }
+    const short = vars.filter(v => v.delta < 0);
+    const over  = vars.filter(v => v.delta > 0);
+    const shortValue = short.reduce((s,v) => s + Math.abs(v.valueDelta || 0), 0);
+    const overValue  = over.reduce((s,v) => s + (v.valueDelta || 0), 0);
+    let html = `<div class="report-row"><span>${entered} item${entered !== 1 ? "s" : ""} counted</span></div>`;
+    html += `<div class="report-row"><span>${short.length} short</span><span style="color:var(--danger);">${peso(shortValue)}</span></div>`;
+    html += `<div class="report-row"><span>${over.length} over</span><span>${peso(overValue)}</span></div>`;
+    if(vars.length === 0) html += `<div class="report-row total"><span>Everything matches</span></div>`;
+    el.innerHTML = html;
+  }
+
+  async function saveCount(){
+    const vars = countVariances();
+    if(vars.length === 0){
+      const entered = Object.keys(countDraft).filter(k => countDraft[k] !== "" && countDraft[k] != null).length;
+      showToast(entered === 0 ? "Nothing counted yet" : "Everything matched — nothing to save");
+      if(entered > 0) closeSheet("countSheet");
+      return;
+    }
+    const shortValue = vars.filter(v => v.delta < 0).reduce((s,v) => s + Math.abs(v.valueDelta || 0), 0);
+    if(!confirm(
+      `Save this count?\n\n${vars.length} item${vars.length !== 1 ? "s" : ""} will be corrected, writing off ${peso(shortValue)} of missing stock.\n\nThis can't be undone.`
+    )) return;
+
+    const btn = $("saveCountBtn");
+    btn.disabled = true;
+    const countId = "count-" + Date.now();
+    const stamp = new Date().toISOString();
+    try{
+      const batch = db.batch();
+      vars.forEach(v => {
+        batch.update(db.collection("products").doc(v.product.id), { stock: v.counted });
+        batch.set(db.collection("stockLogs").doc(), {
+          productId: v.product.id,
+          productName: v.product.name,
+          category: v.product.category || "Uncategorized",
+          from: v.expected,
+          to: v.counted,
+          delta: v.delta,
+          unitCost: v.unitCost,
+          valueDelta: v.valueDelta,
+          reason: "count",
+          countId: countId,
+          countScope: countScope === "__fast__" ? "Ten fastest movers" : countScope,
+          byUid: (auth.currentUser && auth.currentUser.uid) || null,
+          byName: currentUserName || "Owner",
+          timestamp: stamp
+        });
+      });
+      await batch.commit();
+      closeSheet("countSheet");
+      countDraft = {};
+      showToast("Count saved — " + peso(shortValue) + " written off");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't save the count — try again");
+    }
+    btn.disabled = false;
+  }
+
   // ---------- Security & data protection ----------
   const STOCK_REASON_LABELS = {
     recount: "Physical recount",
+    count: "Stock count",
     delivery: "New delivery",
-    damaged: "Damaged / expired",
-    lost: "Missing / lost",
+    spoiled: "Spoiled / expired",
+    damaged: "Damaged / broken",
+    lost: "Missing — unexplained",
+    taken: "Taken without payment",
+    givenaway: "Given away / own use",
+    found: "Found / was miscounted",
+    returned: "Customer return",
     correction: "Entry correction",
     other: "Other"
   };
+
+  // Which reasons represent money that actually left the business.
+  //
+  // A delivery adds stock and a correction fixes a typing mistake — neither is
+  // a loss. A count is only a loss when it came out short; a count that finds
+  // extra stock usually means an earlier count or entry was wrong, so it is
+  // reported separately rather than netted off, which would quietly hide a
+  // real shortage behind a bookkeeping error somewhere else.
+  const LOSS_REASONS = ["spoiled","damaged","lost","taken","givenaway"];
+
+  function isLossEntry(l){
+    if(!l) return false;
+    const delta = Number(l.delta) || 0;
+    if(delta >= 0) return false;
+    if(LOSS_REASONS.indexOf(l.reason) >= 0) return true;
+    return l.reason === "count" || l.reason === "recount";
+  }
+
+  // Cost per pack for valuing a movement. Only the owner can read these
+  // figures at all, so for a staff-made adjustment this is simply unknown and
+  // the entry is stored without a value rather than with a wrong one.
+  function unitCostOf(productId){
+    const c = productCosts[productId];
+    const cost = c ? Number(c.cost) : NaN;
+    return isFinite(cost) && cost > 0 ? cost : null;
+  }
 
   function renderStockLog(){
     const wrap = $("stockLogList");
@@ -4636,6 +6558,7 @@
         <div style="text-align:right;white-space:nowrap;">
           <div style="font-weight:800;color:${up ? "var(--text)" : "var(--danger)"};">${up ? "+" : ""}${formatStock(delta)}</div>
           <div style="color:var(--text-muted);font-size:11px;">${formatStock(l.from)} → ${formatStock(l.to)}</div>
+          ${l.valueDelta != null ? `<div style="font-size:11px;font-weight:700;color:${up ? "var(--text-muted)" : "var(--danger)"};">${up ? "" : "−"}${peso(Math.abs(l.valueDelta))}</div>` : ""}
         </div>
       `;
       wrap.appendChild(row);
@@ -4941,10 +6864,15 @@
       )) return;
     }
     try{
+      if(dayIsClosed(todayISO())){
+        showToast("Today is closed — reopen tomorrow, or accept this order then");
+        return;
+      }
       const invoiceNumber = await getNextInvoiceNumber();
       const batch = db.batch();
       batch.set(db.collection("sales").doc(), {
         timestamp: new Date().toISOString(),
+        businessDate: todayISO(),
         items: o.items,
         total: lineTotal,
         source: "online",
@@ -4992,7 +6920,7 @@
     sales.forEach(s => {
       const k = dateKey(new Date(s.timestamp));
       if(!map[k]) map[k] = {revenue:0, count:0};
-      map[k].revenue += s.total;
+      map[k].revenue += signedTotal(s);
       map[k].count += 1;
     });
     return map;
@@ -5110,7 +7038,7 @@
       const sourceTag = (s.source === "online" ? " · online" : "") + (s.cashierName ? " · " + escapeHtml(s.cashierName) : "");
       card.innerHTML = `
         <div class="top"><span>${d.toLocaleDateString("en-PH",{month:"short",day:"numeric"})} · ${d.toLocaleTimeString("en-PH",{hour:"numeric",minute:"2-digit"})}${sourceTag}</span><span>${itemCount} item${itemCount!==1?"s":""}</span></div>
-        <div class="amt">${peso(s.total)}</div>
+        <div class="amt" style="${isReturnDoc(s) ? "color:var(--danger);" : ""}">${isReturnDoc(s) ? "−" : ""}${peso(s.total)}</div>
       `;
       card.onclick = () => openSaleDetail(s.id);
       list.appendChild(card);
@@ -5179,8 +7107,24 @@
     s.items.forEach(it => {
       html += `<div class="sale-detail-line"><span>${escapeHtml(it.name)} x${it.qty}</span><span>${peso(it.price*it.qty)}</span></div>`;
     });
+    const sd = s.discount;
+    if(sd && sd.amount > 0){
+      html += `<div class="sale-detail-line" style="border-top:1px solid var(--border);margin-top:8px;padding-top:10px;"><span>Subtotal</span><span>${peso(s.subtotal != null ? s.subtotal : s.total + sd.amount)}</span></div>`;
+      html += `<div class="sale-detail-line"><span>${escapeHtml(scpwdKindLabel(sd.kind))} discount · ${escapeHtml(sd.name)} · ID ${escapeHtml(sd.idNumber)}</span><span>−${peso(sd.amount)}</span></div>`;
+    }
     html += `<div class="sale-detail-line" style="font-size:16px;font-weight:800;border-top:1px solid var(--border);margin-top:8px;padding-top:10px;"><span>Total</span><span>${peso(s.total)}</span></div>`;
+    if(isReturnDoc(s)){
+      html += `<p style="font-size:12px;color:var(--text-muted);margin:12px 0 0;">Credit document ${escapeHtml(docNumberOf(s))} against invoice ${escapeHtml(formatInvoiceNumber(s.refInvoice || 0))}.</p>`;
+    } else if(canRecordReturns()){
+      const already = returnsAgainst(s.id);
+      if(already.length > 0){
+        html += `<p style="font-size:12px;color:var(--text-muted);margin:12px 0 0;">Already credited: ${already.map(r => escapeHtml(docNumberOf(r))).join(", ")}.</p>`;
+      }
+      html += `<button class="btn btn-danger" id="openReturnBtn" style="margin-top:14px;">${dayIsClosed(businessDateOf(s)) || businessDateOf(s) !== todayISO() ? "Refund or return items" : "Void or return items"}</button>`;
+    }
     $("saleDetailBody").innerHTML = html;
+    const rb = $("openReturnBtn");
+    if(rb) rb.onclick = () => openReturnSheet(s.id);
     openSheet("saleDetailSheet");
   }
 
@@ -5299,6 +7243,76 @@
     return { start, end };
   }
 
+  async function loadReportStockLogs(){
+    const { start, end } = quarterRange(reportQuarter.year, reportQuarter.q);
+    try{
+      const snap = await db.collection("stockLogs")
+        .where("timestamp", ">=", start.toISOString())
+        .where("timestamp", "<=", end.toISOString())
+        .orderBy("timestamp", "asc")
+        .get();
+      reportStockCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }catch(err){
+      console.error(err);
+      reportStockCache = [];
+    }
+  }
+
+  function lossReportRows(){
+    const headers = ["Date","Product","Category","Reason","Was","Became","Change","Unit cost","Value","By","Count ref"];
+    const rows = reportStockCache.map(l => [
+      new Date(l.timestamp).toLocaleDateString("en-PH"),
+      l.productName || "",
+      l.category || "",
+      STOCK_REASON_LABELS[l.reason] || "Other",
+      formatStock(l.from),
+      formatStock(l.to),
+      formatStock(l.delta),
+      l.unitCost != null ? Number(l.unitCost).toFixed(2) : "",
+      l.valueDelta != null ? Number(l.valueDelta).toFixed(2) : "",
+      l.byName || "",
+      l.countId || ""
+    ]);
+    return { headers, rows };
+  }
+
+  function renderLossReport(){
+    const el = $("lossReportSummary");
+    if(!el) return;
+    const losses = reportStockCache.filter(isLossEntry);
+    if(reportStockCache.length === 0){
+      el.innerHTML = `<div class="report-row"><span>No stock movements recorded this quarter.</span></div>`;
+      return;
+    }
+    if(losses.length === 0){
+      el.innerHTML = `<div class="report-row"><span>No losses recorded this quarter.</span></div>`;
+      return;
+    }
+    // Grouped by reason, because "₱4,200 gone" and "₱4,200 of it spoiled"
+    // lead to completely different decisions.
+    const byReason = {};
+    losses.forEach(l => {
+      const key = l.reason || "other";
+      byReason[key] = (byReason[key] || 0) + Math.abs(Number(l.valueDelta) || 0);
+    });
+    const total = losses.reduce((s,l) => s + Math.abs(Number(l.valueDelta) || 0), 0);
+    const unvalued = losses.filter(l => l.valueDelta == null).length;
+
+    let html = "";
+    Object.keys(byReason).sort((a,b) => byReason[b] - byReason[a]).forEach(r => {
+      html += `<div class="report-row"><span>${escapeHtml(STOCK_REASON_LABELS[r] || "Other")}</span><span>${peso(byReason[r])}</span></div>`;
+    });
+    html += `<div class="report-row total"><span>Lost this quarter</span><span>${peso(total)}</span></div>`;
+    const sales = reportSalesCache.reduce((s, sale) => s + signedTotal(sale), 0);
+    if(sales > 0){
+      html += `<div class="report-row"><span>As a share of sales</span><span>${(total / sales * 100).toFixed(1)}%</span></div>`;
+    }
+    if(unvalued > 0){
+      html += `<div class="report-row" style="color:var(--text-muted);"><span>${unvalued} movement${unvalued !== 1 ? "s" : ""} had no cost recorded, so aren't in the total</span></div>`;
+    }
+    el.innerHTML = html;
+  }
+
   async function loadReportSales(){
     const { start, end } = quarterRange(reportQuarter.year, reportQuarter.q);
     try{
@@ -5367,7 +7381,9 @@
     $("reportQLabel").textContent = "Q" + reportQuarter.q + " " + reportQuarter.year;
     $("taxReportCard").textContent = "Loading…";
     await loadReportSales();
-    const grossSales = reportSalesCache.reduce((s, sale) => s + (sale.total || 0), 0);
+    // Net of returns — a refunded sale is not revenue, and percentage tax is
+    // due on receipts actually kept.
+    const grossSales = reportSalesCache.reduce((s, sale) => s + signedTotal(sale), 0);
     const tax = computeTax(grossSales);
     let html = `<div class="report-row" style="color:var(--text);font-weight:800;">${escapeHtml(tax.label)}</div>`;
     tax.rows.forEach(([label, val], i) => {
@@ -5377,6 +7393,10 @@
     html += `<div class="report-row" style="margin-top:6px;"><span>${reportSalesCache.length} sale${reportSalesCache.length!==1?"s":""} recorded this quarter</span></div>`;
     if(tax.note) html += `<p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:8px 0 0;">${escapeHtml(tax.note)}</p>`;
     $("taxReportCard").innerHTML = html;
+    renderScpwdReport();
+    $("lossReportSummary").textContent = "Loading…";
+    await loadReportStockLogs();
+    renderLossReport();
   }
 
   function csvEscape(v){
@@ -5399,19 +7419,65 @@
   // Each *Rows() function returns {headers, rows} shared by both the CSV
   // download and the printable version, so the two can never drift apart.
   function salesJournalRows(){
-    const headers = ["Date","Invoice No.","Customer","Description","Amount","Cashier"];
+    const headers = ["Date","Invoice No.","Customer","Description","Gross","SC/PWD discount","Amount","Cashier"];
     const rows = reportSalesCache.map(s => {
-      const desc = (s.items||[]).map(it => it.name + " x" + it.qty).join("; ");
+      const sign = saleSign(s);
+      const desc = (isReturnDoc(s) ? "RETURN: " : "") + (s.items||[]).map(it => it.name + " x" + it.qty).join("; ");
+      const disc = sign * ((s.discount && s.discount.amount) || 0);
+      const gross = sign * (s.subtotal != null ? s.subtotal : (s.total || 0) + Math.abs(disc));
       return [
         new Date(s.timestamp).toLocaleDateString("en-PH"),
-        formatInvoiceNumber(s.invoiceNumber || 0),
+        docNumberOf(s),
         s.customerName || (s.source === "online" ? "Online customer" : "Walk-in"),
         desc,
-        (s.total||0).toFixed(2),
+        gross.toFixed(2),
+        disc.toFixed(2),
+        signedTotal(s).toFixed(2),
         s.cashierName || ""
       ];
     });
     return { headers, rows };
+  }
+
+  function scpwdReportRows(){
+    const headers = ["Date","Invoice No.","Type","Name","ID No.","Booklet No.","Eligible amount","Discount"];
+    const rows = reportSalesCache
+      .filter(s => s.discount && s.discount.amount > 0)
+      .map(s => {
+        const d = s.discount;
+        const base = round2((d.basicBase || 0) + (d.medicineBase || 0));
+        return [
+          new Date(s.timestamp).toLocaleDateString("en-PH"),
+          formatInvoiceNumber(s.invoiceNumber || 0),
+          scpwdKindLabel(d.kind),
+          d.name || "",
+          d.idNumber || "",
+          d.booklet || "",
+          base.toFixed(2),
+          (d.amount || 0).toFixed(2)
+        ];
+      });
+    return { headers, rows };
+  }
+
+  function renderScpwdReport(){
+    const block = $("scpwdReportBlock"), label = $("scpwdReportLabel");
+    if(!block) return;
+    const show = scpwdActive();
+    block.style.display = show ? "" : "none";
+    if(label) label.style.display = show ? "" : "none";
+    if(!show) return;
+    const granted = reportSalesCache.filter(s => s.discount && s.discount.amount > 0);
+    const total = granted.reduce((sum, s) => sum + (s.discount.amount || 0), 0);
+    const el = $("scpwdReportSummary");
+    if(!el) return;
+    if(granted.length === 0){
+      el.innerHTML = `<div class="report-row"><span>No discounts granted this quarter.</span></div>`;
+      return;
+    }
+    el.innerHTML =
+      `<div class="report-row"><span>${granted.length} discounted sale${granted.length !== 1 ? "s" : ""}</span></div>` +
+      `<div class="report-row total"><span>Total granted</span><span>${peso(total)}</span></div>`;
   }
 
   // This POS is cash/GCash-on-collection only (no credit sales), so every
@@ -5420,9 +7486,9 @@
     const headers = ["Date","Invoice No.","Received From","Amount"];
     const rows = reportSalesCache.map(s => [
       new Date(s.timestamp).toLocaleDateString("en-PH"),
-      formatInvoiceNumber(s.invoiceNumber || 0),
-      s.customerName || (s.source === "online" ? "Online customer" : "Walk-in"),
-      (s.total||0).toFixed(2)
+      docNumberOf(s),
+      (isReturnDoc(s) ? "REFUND TO " : "") + (s.customerName || (s.source === "online" ? "Online customer" : "Walk-in")),
+      signedTotal(s).toFixed(2)
     ]);
     return { headers, rows };
   }
@@ -5432,10 +7498,17 @@
     const rows = [];
     reportSalesCache.forEach(s => {
       const date = new Date(s.timestamp).toLocaleDateString("en-PH");
-      const inv = formatInvoiceNumber(s.invoiceNumber || 0);
-      const amt = (s.total||0).toFixed(2);
-      rows.push([date, inv, "Cash", amt, ""]);
-      rows.push([date, inv, "Sales", "", amt]);
+      const inv = docNumberOf(s);
+      const amt = Math.abs(signedTotal(s)).toFixed(2);
+      if(isReturnDoc(s)){
+        // The mirror image of a sale: the returns account is debited and the
+        // cash that went back out is credited.
+        rows.push([date, inv, "Sales returns", amt, ""]);
+        rows.push([date, inv, "Cash", "", amt]);
+      } else {
+        rows.push([date, inv, "Cash", amt, ""]);
+        rows.push([date, inv, "Sales", "", amt]);
+      }
     });
     return { headers, rows };
   }
@@ -5447,16 +7520,16 @@
     rows.push(["CASH","","","","",""]);
     reportSalesCache.forEach(s => {
       const date = new Date(s.timestamp).toLocaleDateString("en-PH");
-      const inv = formatInvoiceNumber(s.invoiceNumber || 0);
-      const amt = s.total||0;
+      const inv = docNumberOf(s);
+      const amt = signedTotal(s);
       cashBal += amt;
       rows.push(["", date, inv, amt.toFixed(2), "", cashBal.toFixed(2)]);
     });
     rows.push(["SALES","","","","",""]);
     reportSalesCache.forEach(s => {
       const date = new Date(s.timestamp).toLocaleDateString("en-PH");
-      const inv = formatInvoiceNumber(s.invoiceNumber || 0);
-      const amt = s.total||0;
+      const inv = docNumberOf(s);
+      const amt = signedTotal(s);
       salesBal += amt;
       rows.push(["", date, inv, "", amt.toFixed(2), salesBal.toFixed(2)]);
     });
@@ -5469,10 +7542,11 @@
     const headers = ["Product","Qty Sold","Total Amount"];
     const map = {};
     reportSalesCache.forEach(s => {
+      const sign = saleSign(s);
       (s.items||[]).forEach(it => {
         if(!map[it.name]) map[it.name] = { qty: 0, amount: 0 };
-        map[it.name].qty += it.qty;
-        map[it.name].amount += it.qty * it.price;
+        map[it.name].qty += sign * (Number(it.qty) || 0);
+        map[it.name].amount += sign * (Number(it.qty) || 0) * (Number(it.price) || 0);
       });
     });
     const rows = Object.keys(map).sort().map(name => [name, String(map[name].qty), map[name].amount.toFixed(2)]);
@@ -5483,6 +7557,10 @@
   function downloadCashReceiptsJournal(){ const {headers, rows} = cashReceiptsJournalRows(); downloadCsv("cash-receipts-journal-" + quarterFileTag() + ".csv", headers, rows); }
   function downloadGeneralJournal(){ const {headers, rows} = generalJournalRows(); downloadCsv("general-journal-" + quarterFileTag() + ".csv", headers, rows); }
   function downloadGeneralLedger(){ const {headers, rows} = generalLedgerRows(); downloadCsv("general-ledger-" + quarterFileTag() + ".csv", headers, rows); }
+  function downloadLossReport(){ const {headers, rows} = lossReportRows(); downloadCsv("stock-movements-" + quarterFileTag() + ".csv", headers, rows); }
+  function printLossReport(){ const {headers, rows} = lossReportRows(); printTableReport("Stock Movements & Loss", headers, rows); }
+  function downloadScpwdReport(){ const {headers, rows} = scpwdReportRows(); downloadCsv("senior-pwd-discounts-" + quarterFileTag() + ".csv", headers, rows); }
+  function printScpwdReport(){ const {headers, rows} = scpwdReportRows(); printTableReport("Senior Citizen & PWD Discounts Granted", headers, rows); }
   function downloadSubsidiaryLedger(){ const {headers, rows} = subsidiaryLedgerRows(); downloadCsv("subsidiary-sales-ledger-" + quarterFileTag() + ".csv", headers, rows); }
 
   // ---------- Printing full-page reports (bond paper, not the 80mm receipt) ----------
@@ -5574,6 +7652,7 @@
   let purchases = [];
   let supplierPayments = [];
   let deliveryLines = [];
+  let receivingOrderId = null;  // set when a delivery is being checked against an order
   let editingSupplierId = null;
 
   const DEFAULT_LEAD_DAYS = 3;
@@ -5602,13 +7681,14 @@
     for(const s of sales){
       if(!s.timestamp) continue;
       if(new Date(s.timestamp) < fromDate) continue;
+      const sign = saleSign(s);
       for(const it of (s.items || [])){
         if(it.productId !== productId) continue;
         const perPack = it.unit === "sub" ? (it.perPack || 1) : 1;
-        total += (Number(it.qty) || 0) / perPack;
+        total += sign * (Number(it.qty) || 0) / perPack;
       }
     }
-    return total;
+    return Math.max(0, total);
   }
 
   function lastSoldDaysAgo(productId){
@@ -5635,10 +7715,11 @@
     let rev = 0, packs = 0;
     for(const s of sales){
       if(!s.timestamp || new Date(s.timestamp) < from) continue;
+      const sign = saleSign(s);
       for(const it of (s.items || [])){
         if(it.productId !== p.id) continue;
         const perPack = it.unit === "sub" ? (it.perPack || 1) : 1;
-        const qty = Number(it.qty) || 0;
+        const qty = sign * (Number(it.qty) || 0);
         rev += (Number(it.price) || 0) * qty;
         packs += qty / perPack;
       }
@@ -5647,14 +7728,162 @@
     return rev / packs;
   }
 
-  // Blended so a real change in the last week shows up quickly, without one
-  // unusual day dominating. If there is no 28-day history yet, the 7-day rate
-  // stands on its own.
-  function velocityFor(productId){
-    const v7 = packsSoldSince(productId, daysAgo(7)) / 7;
-    const v28 = packsSoldSince(productId, daysAgo(28)) / 28;
-    if(v28 <= 0) return v7;
-    return 0.6 * v7 + 0.4 * v28;
+  // ---- How fast a thing really sells ----------------------------------
+  //
+  // The naive way to measure demand is packs sold divided by days. It is also
+  // the way that quietly strangles your best lines.
+  //
+  // Sales can never exceed stock. If rice was out of stock for four of the
+  // last seven days, dividing by seven reports a demand less than half the
+  // truth — so the POS suggests a smaller order, which runs out sooner, which
+  // lowers the measured demand again. The fastest movers are exactly the ones
+  // that run out, so the error lands hardest where it costs most.
+  //
+  // The fix is to divide by the days the product could actually be sold. There
+  // is no stored history of stock levels, but there doesn't need to be: today's
+  // stock is known, and every movement since is known too — sales, deliveries
+  // and manual corrections. Rewinding those day by day reconstructs what was
+  // on the shelf each morning, which is all this needs.
+
+  function dayKeyOf(d){
+    const x = new Date(d);
+    return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0");
+  }
+
+  // Every known change to one product's stock, gathered per day.
+  // Sales take stock away; deliveries and corrections move it either way.
+  function stockMovementsByDay(productId){
+    const byDay = {};
+    const add = (when, delta) => {
+      if(!when) return;
+      const k = dayKeyOf(when);
+      byDay[k] = (byDay[k] || 0) + delta;
+    };
+    for(const s of sales){
+      // A return that went back on the shelf is recorded as a stock log entry
+      // below; counting it here as well would put the goods back twice.
+      if(isReturnDoc(s)) continue;
+      for(const it of (s.items || [])){
+        if(it.productId !== productId) continue;
+        const perPack = it.unit === "sub" ? (it.perPack || 1) : 1;
+        add(s.timestamp, -((Number(it.qty) || 0) / perPack));
+      }
+    }
+    for(const pur of purchases){
+      for(const it of (pur.items || [])){
+        if(it.productId !== productId) continue;
+        add(pur.date + "T12:00:00", Number(it.qty) || 0);
+      }
+    }
+    for(const l of stockLogs){
+      if(l.productId !== productId) continue;
+      add(l.timestamp, Number(l.delta) || 0);
+    }
+    return byDay;
+  }
+
+  // Days within the window on which the product was sellable — it had stock at
+  // the start of the day, or it sold at all that day. Returns the count of
+  // sellable days and how many were lost to being out of stock.
+  function sellableDays(productId, windowDays){
+    const byDay = stockMovementsByDay(productId);
+    const p = products.find(x => x.id === productId);
+    let running = p ? (Number(p.stock) || 0) : 0;
+    let sellable = 0, out = 0;
+    const now = new Date();
+    for(let d = 0; d < windowDays; d++){
+      const day = new Date(now);
+      day.setDate(day.getDate() - d);
+      const k = dayKeyOf(day);
+      const moved = byDay[k] || 0;
+      const startOfDay = running - moved;          // before the day's movements
+      const soldToday = moved < 0;
+      if(startOfDay > 0.0001 || soldToday) sellable++; else out++;
+      running = startOfDay;                        // step back one day
+    }
+    return { sellable, out };
+  }
+
+  // A product added a week ago has only a week of history, so dividing its
+  // sales by 28 days makes a brisk new line look like a dud.
+  function daysSinceFirstSale(productId){
+    let oldest = null;
+    for(const s of sales){
+      if(!s.timestamp) continue;
+      if(!(s.items || []).some(it => it.productId === productId)) continue;
+      const t = new Date(s.timestamp);
+      if(!oldest || t < oldest) oldest = t;
+    }
+    if(!oldest) return null;
+    return Math.floor((Date.now() - oldest.getTime()) / 86400000) + 1;
+  }
+
+  // The rate over one window, measured only across the days it could sell.
+  function rateOver(productId, windowDays){
+    const packs = packsSoldSince(productId, daysAgo(windowDays));
+    const { sellable, out } = sellableDays(productId, windowDays);
+    const age = daysSinceFirstSale(productId);
+    let days = sellable;
+    if(age != null) days = Math.min(days, age);
+    days = Math.max(1, days);                      // never divide by nothing
+    return { rate: packs / days, packs, days, out, censored: out > 0 };
+  }
+
+  // Two windows, blended by how much evidence the short one carries.
+  //
+  // A fixed blend treats "sold 40 packs this week" and "sold 1 pack this week"
+  // as equally informative, and they are not: for a slow mover the seven-day
+  // rate swings between zero and double on the strength of a single sale. So
+  // the recent window earns its weight — full trust at around ten packs, very
+  // little below two — while the four-week rate carries the rest. Both windows
+  // are whole numbers of weeks, so Sunday trade doesn't skew either one.
+  function velocityDetail(productId){
+    const r7 = rateOver(productId, 7);
+    const r28 = rateOver(productId, 28);
+    if(r28.packs <= 0 && r7.packs <= 0) return { v: 0, r7, r28, w7: 1, trend: "none" };
+    if(r28.packs <= 0) return { v: r7.rate, r7, r28, w7: 1, trend: "new" };
+    const w7 = Math.max(0, Math.min(0.6, r7.packs / 10));
+    const v = w7 * r7.rate + (1 - w7) * r28.rate;
+    let trend = "steady";
+    if(r7.packs >= 3 && r28.rate > 0){
+      const ratio = r7.rate / r28.rate;
+      if(ratio >= 1.25) trend = "rising";
+      else if(ratio <= 0.75) trend = "falling";
+    }
+    return { v, r7, r28, w7, trend };
+  }
+
+  function velocityFor(productId){ return velocityDetail(productId).v; }
+
+  // How much cushion a line needs, from how erratic it actually is.
+  //
+  // Half the lead time is the right cushion for something that sells five a
+  // day every day. It is far too little for a line that sells nothing for a
+  // fortnight and then forty at a fiesta. Four weekly totals give a rough but
+  // honest measure of that swing, and the cushion grows with it.
+  function demandVariability(productId){
+    const weeks = [];
+    for(let w = 0; w < 4; w++){
+      const from = daysAgo((w + 1) * 7);
+      const to = daysAgo(w * 7);
+      let total = 0;
+      for(const s of sales){
+        if(!s.timestamp) continue;
+        const t = new Date(s.timestamp);
+        if(t < from || t >= to) continue;
+        const sign = saleSign(s);
+        for(const it of (s.items || [])){
+          if(it.productId !== productId) continue;
+          const perPack = it.unit === "sub" ? (it.perPack || 1) : 1;
+          total += sign * (Number(it.qty) || 0) / perPack;
+        }
+      }
+      weeks.push(Math.max(0, total));
+    }
+    const mean = weeks.reduce((a, b) => a + b, 0) / weeks.length;
+    if(mean <= 0) return 0;
+    const variance = weeks.reduce((a, b) => a + (b - mean) * (b - mean), 0) / weeks.length;
+    return Math.sqrt(variance) / mean;   // coefficient of variation
   }
 
   // ---- What a delivery still owes -------------------------------------
@@ -5671,10 +7900,30 @@
     }
     return earned;
   }
+  // Three kinds of document now live in this collection, and only one of them
+  // is a bill.
+  //
+  //   delivery — goods arrived, money is owed (the original and still the norm)
+  //   order    — goods were ASKED for. Nothing is owed until they turn up, so
+  //              an order must never reach the payables, or you would appear
+  //              to owe money for a van that has not left yet.
+  //   credit   — the supplier owes YOU, because they billed for more than they
+  //              delivered. Stored with a positive total and subtracted, for
+  //              the same reason returns are: the rules refuse a negative.
+  function purchaseKind(pur){ return (pur && pur.type) || "delivery"; }
+  function isOrderDoc(pur){ return purchaseKind(pur) === "order"; }
+  function isCreditDoc(pur){ return purchaseKind(pur) === "credit"; }
+
   function purchaseBilled(pur){
+    if(isOrderDoc(pur)) return 0;
+    if(isCreditDoc(pur)) return -(Number(pur.total) || 0);
     return pur.consignment ? consignmentEarned(pur) : (Number(pur.total) || 0);
   }
   function purchaseOutstanding(pur){
+    if(isOrderDoc(pur)) return 0;
+    // A credit is negative and must stay negative — clamping it at zero would
+    // quietly throw away money the supplier owes you.
+    if(isCreditDoc(pur)) return purchaseBilled(pur);
     return Math.max(0, purchaseBilled(pur) - (Number(pur.paidAmount) || 0));
   }
   function supplierBalance(supplierId){
@@ -5683,7 +7932,7 @@
       .reduce((sum, p) => sum + purchaseOutstanding(p), 0);
   }
   function purchaseDueISO(pur){
-    if(pur.consignment) return null;
+    if(pur.consignment || isOrderDoc(pur) || isCreditDoc(pur)) return null;
     return pur.dueDate || null;
   }
   function isOverdue(pur){
@@ -5786,6 +8035,7 @@
         <div class="sup-actions">
           <button data-sup-delivery="${s.id}">Record delivery</button>
           <button data-sup-payment="${s.id}">Record payment</button>
+          <button data-sup-credit="${s.id}">Credit</button>
           <button data-sup-edit="${s.id}">Edit</button>
         </div>
       </div>`;
@@ -5794,6 +8044,7 @@
     el.querySelectorAll("[data-sup-edit]").forEach(b => b.onclick = () => openSupplierSheet(b.dataset.supEdit));
     el.querySelectorAll("[data-sup-delivery]").forEach(b => b.onclick = () => openDeliverySheet(b.dataset.supDelivery));
     el.querySelectorAll("[data-sup-payment]").forEach(b => b.onclick = () => openPaymentSheet(b.dataset.supPayment));
+    el.querySelectorAll("[data-sup-credit]").forEach(b => b.onclick = () => openCreditSheet(b.dataset.supCredit));
   }
 
   // ---- The ordering plan ----------------------------------------------
@@ -5804,13 +8055,22 @@
     const sup = p.supplierId ? supplierById(p.supplierId) : null;
     const lead = sup && Number(sup.leadTimeDays) > 0 ? Number(sup.leadTimeDays) : DEFAULT_LEAD_DAYS;
     const cycle = sup && Number(sup.orderCycleDays) > 0 ? Number(sup.orderCycleDays) : DEFAULT_CYCLE_DAYS;
-    const safety = Math.max(2, lead * 0.5);
-    const v = velocityFor(p.id);
+    // The cushion grows with how erratic the line is, not just how long the
+    // supplier takes: a steady seller keeps half the lead time, a swinging one
+    // gets up to one and a half times it.
+    const cv = demandVariability(p.id);
+    const safety = Math.max(2, lead * (0.5 + Math.min(1, cv)));
+    const vd = velocityDetail(p.id);
+    const v = vd.v;
     const stock = Number(p.stock) || 0;
     const cover = v > 0 ? stock / v : (stock > 0 ? Infinity : 0);
     const reorderPoint = v * (lead + safety);
     const target = v * (lead + cycle + safety);
-    const suggest = Math.max(0, Math.ceil(target - stock));
+    // Rounded up to whatever the supplier actually sells it in — a suggestion
+    // of 7 when the carton holds 12 isn't an order anyone can place.
+    const mult = Math.max(1, Number(p.orderMultiple) || 1);
+    const rawNeed = Math.max(0, target - stock);
+    const suggest = rawNeed > 0 ? Math.ceil(rawNeed / mult) * mult : 0;
     const m = productMargin(p);
     // Profit is taken AFTER operating cost, because a line can look healthy on
     // gross margin and still lose money once the cost of selling it is counted.
@@ -5822,11 +8082,43 @@
     const cashNeeded = m ? m.cost * suggest : null;
     const roc = (profitPerDay != null && cashNeeded > 0) ? profitPerDay / cashNeeded : null;
     const losing = !!(m && m.afterOp < 0);
-    return { p, sup, lead, cycle, safety, v, stock, cover, reorderPoint, target, suggest, m, perUnit, profitPerDay, cashNeeded, roc, losing };
+    return { p, sup, lead, cycle, safety, cv, v, vd, mult, stock, cover, reorderPoint, target, suggest, m, perUnit, profitPerDay, cashNeeded, roc, losing };
   }
 
   // Money already promised to suppliers this week is not money available for
   // new stock, so it comes off the budget before anything is allocated.
+  // Kept in the shared settings document so the rule is the same on every
+  // device, rather than something each phone remembers differently.
+  function buyingReserve(){
+    const v = Number(designSettings.buyReserve);
+    return isFinite(v) && v > 0 ? v : 0;
+  }
+  function buyingCapPct(){
+    const v = Number(designSettings.buyCapPct);
+    return isFinite(v) && v >= 5 && v <= 100 ? v : 25;
+  }
+
+  async function saveBuyingLimits(){
+    const reserveRaw = parseFloat($("buyReserveInput").value);
+    const capRaw = parseInt($("buyCapInput").value, 10);
+    const data = {
+      buyReserve: isFinite(reserveRaw) && reserveRaw > 0 ? reserveRaw : null,
+      buyCapPct: isFinite(capRaw) && capRaw >= 5 && capRaw <= 100 ? capRaw : null
+    };
+    try{
+      await db.collection("settings").doc("design").set(data, { merge: true });
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't save the buying limits");
+    }
+  }
+
+  function fillBuyingLimitInputs(){
+    const r = $("buyReserveInput"), c = $("buyCapInput");
+    if(r && document.activeElement !== r) r.value = buyingReserve() > 0 ? buyingReserve() : "";
+    if(c && document.activeElement !== c) c.value = buyingCapPct();
+  }
+
   function committedNext7Days(){
     return purchases
       .filter(p => purchaseOutstanding(p) > 0.005)
@@ -5840,24 +8132,53 @@
   function renderOrderPlan(){
     const el = $("orderPlanList");
     if(!el) return;
+    fillBuyingLimitInputs();
 
     const budgetRaw = parseFloat($("buyBudgetInput").value);
     const budget = isNaN(budgetRaw) ? null : budgetRaw;
     const committed = committedNext7Days();
-    const safeToSpend = budget == null ? null : Math.max(0, budget - committed);
+    const reserve = buyingReserve();
+    // Three claims on the same money, in order: what suppliers are already
+    // owed this week, the reserve that is never spent, and only then stock.
+    const safeToSpend = budget == null ? null : Math.max(0, budget - committed - reserve);
+    // No single line may take more than this share of what's left. Ranking by
+    // return decides the ORDER; this decides the SIZE — two different
+    // questions, and running them together is how a week's budget ends up
+    // inside one sack of rice.
+    const capPct = buyingCapPct();
+    const perLineCap = safeToSpend == null ? null : safeToSpend * capPct / 100;
 
     const note = $("budgetNote");
     if(note){
       if(budget == null){
         note.innerHTML = `Enter what you can spend and the list below will be funded in order, best return first. ${committed > 0 ? "<b>" + peso(committed) + "</b> is already promised to suppliers in the next 7 days." : ""}`;
       } else {
-        note.innerHTML = `<b>${peso(safeToSpend)}</b> safe to spend on stock — ${peso(budget)} on hand less ${peso(committed)} owed to suppliers within 7 days.`;
+        const parts = [`${peso(budget)} on hand`];
+        if(committed > 0) parts.push(`less ${peso(committed)} owed to suppliers within 7 days`);
+        if(reserve > 0) parts.push(`less ${peso(reserve)} kept back`);
+        note.innerHTML = `<b>${peso(safeToSpend)}</b> to spend on stock — ${parts.join(", ")}.` +
+          (perLineCap != null && perLineCap > 0 ? `<br>No more than <b>${peso(perLineCap)}</b> on any one item (${capPct}%).` : "");
       }
     }
+
+    // The whole-shop list answers "what should I buy this week". Standing in
+    // front of one supplier's van it is the wrong list: you need their items,
+    // their quantities and their total, and nothing else.
+    const supSel = $("buySupplierSelect");
+    if(supSel){
+      const want = supSel.value || "";
+      supSel.innerHTML = `<option value="">All suppliers</option>` +
+        suppliers.map(su => `<option value="${su.id}">${escapeHtml(su.name)}</option>`).join("") +
+        `<option value="__none__">No supplier set</option>`;
+      supSel.value = want;
+    }
+    const supFilter = supSel ? supSel.value : "";
 
     const showAll = $("buyFilterSelect").value === "all";
     let plans = products.map(orderPlanFor).filter(pl => pl.v > 0 || pl.stock > 0);
     plans = plans.filter(pl => showAll ? pl.v > 0 : pl.suggest > 0 && pl.cover <= pl.lead + pl.safety);
+    if(supFilter === "__none__") plans = plans.filter(pl => !pl.p.supplierId);
+    else if(supFilter) plans = plans.filter(pl => pl.p.supplierId === supFilter);
 
     // Rank by return on cash: pesos of profit per day for each peso tied up.
     // A product with no cost recorded can't be ranked, so it sorts last with a
@@ -5872,26 +8193,54 @@
     if(plans.length === 0){
       el.innerHTML = `<div style="font-size:13px;color:var(--text-muted);">${showAll ? "No product has recorded sales yet — the plan appears once the POS has some history to read." : "Nothing needs ordering. Every line has enough cover to reach its next delivery."}</div>`;
       lastOrderPlan = [];
+      $("startDeliveryFromPlanBtn").style.display = "none";
+      $("savePlanAsOrderBtn").style.display = "none";
+      $("supplierOrderNote").style.display = "none";
       return;
     }
 
     let spent = 0;
     let rank = 0;
     const html = plans.map(pl => {
-      const cost = pl.cashNeeded;
+      let cost = pl.cashNeeded;
       let funded = true;
       let skipReason = "";
+      let trimmed = false;
+
+      // Trim before skipping. A line worth ordering that happens to be
+      // expensive should be bought in a smaller quantity, not abandoned — but
+      // only down to a whole lot, since a half-carton isn't orderable.
+      if(!pl.losing && perLineCap != null && cost != null && cost > perLineCap && pl.m && pl.m.cost > 0){
+        const affordable = Math.floor(perLineCap / pl.m.cost / pl.mult) * pl.mult;
+        if(affordable >= pl.mult){
+          pl.suggest = affordable;
+          cost = pl.cashNeeded = round2(affordable * pl.m.cost);
+          trimmed = true;
+        } else {
+          funded = false;
+          skipReason = `One lot costs more than the ${capPct}% cap allows — order it on its own week`;
+        }
+      }
+
       if(pl.losing){ funded = false; skipReason = "Losing money at this price — fix the price before buying more"; }
-      else if(safeToSpend != null && cost != null && spent + cost > safeToSpend){ funded = false; skipReason = "Beyond this week's budget"; }
+      else if(funded && safeToSpend != null && cost != null && spent + cost > safeToSpend){ funded = false; skipReason = "Beyond this week's budget"; }
       if(funded && cost != null) spent += cost;
       if(funded) rank++;
       pl.funded = funded;
+      if(trimmed && funded) pl.trimmed = true;
 
       const coverTxt = pl.cover === Infinity ? "no sales yet" : `${pl.cover.toFixed(1)} days left`;
       const flags = [];
       if(pl.cover < pl.lead) flags.push(`<span class="flag urgent">Runs out before delivery</span>`);
       if(pl.losing) flags.push(`<span class="flag loss">Losing money</span>`);
       if(pl.m == null) flags.push(`<span class="flag slow">No cost recorded</span>`);
+      if(trimmed && funded) flags.push(`<span class="flag slow">Trimmed to the ${capPct}% single-item cap</span>`);
+      if(pl.vd.trend === "rising") flags.push(`<span class="flag urgent">Selling faster lately</span>`);
+      if(pl.vd.trend === "falling") flags.push(`<span class="flag slow">Slowing down</span>`);
+      // Saying so matters: an order built on a demand figure measured through
+      // an empty shelf is a guess, and the owner should know which ones are.
+      const outDays = pl.vd.r28 ? pl.vd.r28.out : 0;
+      if(outDays >= 3) flags.push(`<span class="flag slow">Out of stock ${outDays} of 28 days — demand estimated from the days it had stock</span>`);
 
       return `<div class="buy-row ${funded ? "" : "skipped"}">
         <div class="rank">${funded ? rank : "—"}</div>
@@ -5899,6 +8248,7 @@
           <div class="nm">${escapeHtml(pl.p.name)}</div>
           <div class="meta">
             ${formatStock(pl.stock)} in stock · sells ${pl.v.toFixed(2)}/day · ${coverTxt}${pl.sup ? " · " + escapeHtml(pl.sup.name) : ""}
+            <br>Cushion ${pl.safety.toFixed(1)} days${pl.cv > 0.6 ? " (swings a lot)" : ""}${pl.mult > 1 ? ` · ordered in ${pl.mult}s` : ""}
             ${pl.roc != null ? `<br>Earns ${peso(pl.profitPerDay)}/day · ${(pl.roc * 100).toFixed(1)}% return per day on the cash` : ""}
             ${skipReason ? `<br><b>${escapeHtml(skipReason)}</b>` : ""}
           </div>
@@ -5920,7 +8270,60 @@
       <div class="report-row"><span>Profit it should earn</span><span>${peso(totalProfit)} a day</span></div>`;
 
     lastOrderPlan = plans;
+
+    // One tap from "here is what to buy" to "here is what arrived", with the
+    // quantities already filled in. Retyping the list is where a good plan
+    // usually dies.
+    const btn = $("startDeliveryFromPlanBtn");
+    const noteEl = $("supplierOrderNote");
+    const orderable = fundedPlans.filter(pl => pl.suggest > 0);
+    if(supFilter && supFilter !== "__none__" && orderable.length > 0){
+      const su = supplierById(supFilter);
+      btn.style.display = "block";
+      btn.textContent = `It already arrived — record a delivery from ${su ? su.name : "this supplier"}`;
+      $("savePlanAsOrderBtn").style.display = "block";
+      if(noteEl && su){
+        const bal = supplierBalance(su.id);
+        const lim = Number(su.creditLimit) || 0;
+        const room = lim > 0 ? lim - bal : null;
+        noteEl.style.display = "block";
+        noteEl.innerHTML =
+          `<b>${orderable.length}</b> item${orderable.length !== 1 ? "s" : ""} to order, <b>${peso(totalCost)}</b> in total.` +
+          (lim > 0
+            ? `<br>You owe ${su.name} ${peso(bal)} of a ${peso(lim)} limit — ${room >= totalCost
+                ? `${peso(room)} of room, enough for this order.`
+                : `<span style="color:var(--danger);">only ${peso(Math.max(0, room))} of room, so this order goes over.</span>`}`
+            : "");
+      }
+    } else {
+      btn.style.display = "none";
+      $("savePlanAsOrderBtn").style.display = "none";
+      if(noteEl) noteEl.style.display = "none";
+    }
   }
+
+  // Opens the delivery sheet already carrying the suggested lines. Quantities
+  // and costs are the plan's own figures — every one of them is editable
+  // before saving, because what the van actually brings is rarely what was
+  // asked for, and the delivery record must match the goods, not the wish.
+  function startDeliveryFromPlan(){
+    const supId = $("buySupplierSelect").value;
+    if(!supId || supId === "__none__"){ showToast("Choose a supplier first"); return; }
+    const lines = (lastOrderPlan || [])
+      .filter(pl => pl.funded && pl.suggest > 0 && pl.p.supplierId === supId)
+      .map(pl => ({
+        productId: pl.p.id,
+        name: pl.p.name,
+        qty: pl.suggest,
+        unitCost: pl.m ? pl.m.cost : 0
+      }));
+    if(lines.length === 0){ showToast("Nothing to order from this supplier"); return; }
+    openDeliverySheet(supId);
+    deliveryLines = lines;
+    renderDeliveryLines();
+    showToast("Check the quantities against what actually arrived");
+  }
+
   let lastOrderPlan = [];
 
   function renderDeadStock(){
@@ -5973,7 +8376,7 @@
       const billed = purchaseBilled(p);
       const status = out <= 0.005 ? "Settled" : (p.consignment ? `${peso(out)} owed on what's sold` : `${peso(out)} unpaid`);
       return `<div class="due-row ${isOverdue(p) ? "late" : ""}">
-        <div class="who"><div>${escapeHtml(p.supplierName || "Supplier")}${p.consignment ? " · consignment" : ""}</div>
+        <div class="who"><div>${escapeHtml(p.supplierName || "Supplier")}${isCreditDoc(p) ? " · credit" : isOrderDoc(p) ? " · order" : p.consignment ? " · consignment" : ""}</div>
         <div class="when">${escapeHtml(p.date || "")} · ${(p.items || []).length} item${(p.items || []).length === 1 ? "" : "s"}${p.ref ? " · " + escapeHtml(p.ref) : ""} · ${status}</div></div>
         <div class="amt">${peso(p.consignment ? billed : (Number(p.total) || 0))}</div>
       </div>`;
@@ -5985,6 +8388,9 @@
     renderPayables();
     renderSupplierList();
     renderOrderPlan();
+    renderOpenOrders();
+    renderCostChanges();
+    renderExpiring();
     renderDeadStock();
     renderPurchaseHistory();
   }
@@ -6063,12 +8469,15 @@
     if(suppliers.length === 0){ showToast("Add a supplier first"); return; }
     if(products.length === 0){ showToast("Add a product first"); return; }
     deliveryLines = [];
+    receivingOrderId = null;
     fillSupplierSelect($("dl-supplier"), supplierId);
     fillProductSelect($("dl-product"));
     $("dl-date").value = todayISO();
     $("dl-ref").value = "";
     $("dl-qty").value = "";
     $("dl-unitCost").value = "";
+    $("dl-freight").value = "";
+    $("dl-expiry").value = "";
     $("dl-updateCost").checked = true;
     renderDeliveryLines();
     updateDeliveryTermsNote();
@@ -6096,9 +8505,14 @@
     if(!p){ showToast("Choose a product"); return; }
     if(isNaN(qty) || qty <= 0){ showToast("Enter a quantity"); return; }
     if(isNaN(unitCost) || unitCost < 0){ showToast("Enter the cost per pack"); return; }
-    deliveryLines.push({ productId: pid, name: p.name, qty, unitCost });
+    const expiry = ($("dl-expiry").value || "").trim() || null;
+    if(p.perishable && !expiry){
+      if(!confirm(p.name + " is marked as something that goes off, but no expiry date was entered.\n\nAdd it without a date?")) return;
+    }
+    deliveryLines.push({ productId: pid, name: p.name, qty, unitCost, expiry });
     $("dl-qty").value = "";
     $("dl-unitCost").value = "";
+    $("dl-expiry").value = "";
     renderDeliveryLines();
   }
   function renderDeliveryLines(){
@@ -6107,26 +8521,38 @@
     if(deliveryLines.length === 0){
       el.innerHTML = `<div style="font-size:12px;color:var(--text-muted);">No items added yet.</div>`;
     } else {
+      const freightNow = Math.max(0, parseFloat($("dl-freight") ? $("dl-freight").value : 0) || 0);
+      const landed = spreadFreight(deliveryLines, freightNow);
       el.innerHTML = deliveryLines.map((l, i) => {
+        const lr = landed[i];
         const p = products.find(x => x.id === l.productId);
         const old = p ? productMargin(p) : null;
         const oldCost = old ? old.cost : null;
         const oldStock = p ? (Number(p.stock) || 0) : 0;
         let costNote = "";
         if($("dl-updateCost").checked){
+          const unit = lr.landedUnitCost;
           const blended = oldCost != null && oldStock > 0
-            ? (oldStock * oldCost + l.qty * l.unitCost) / (oldStock + l.qty)
-            : l.unitCost;
+            ? (oldStock * oldCost + l.qty * unit) / (oldStock + l.qty)
+            : unit;
           costNote = oldCost != null
             ? `<div class="cost-change">Cost ${peso(oldCost)} → ${peso(blended)}</div>`
-            : `<div class="cost-change">Cost will be set to ${peso(l.unitCost)}</div>`;
+            : `<div class="cost-change">Cost will be set to ${peso(unit)}</div>`;
+          if(lr.freightShare > 0){
+            costNote += `<div class="cost-change">Landed ${peso(l.unitCost)} + ${peso(lr.freightShare / l.qty)} haul = ${peso(unit)}</div>`;
+          }
         }
         return `<div class="dl-line">
-          <div class="n">${escapeHtml(l.name)}${costNote}</div>
-          <div class="q">${formatStock(l.qty)} × ${peso(l.unitCost)}</div>
+          <div class="n">${escapeHtml(l.name)}${l.expiry ? `<div class="cost-change">Expires ${escapeHtml(l.expiry)}</div>` : ""}${costNote}</div>
+          <div class="q">${formatStock(l.qty)} × ${peso(l.unitCost)}${
+            l.orderedQty != null && Math.abs(l.orderedQty - l.qty) > 0.0001
+              ? `<div class="cost-change" style="color:var(--danger);">${l.qty < l.orderedQty ? "short " + formatStock(l.orderedQty - l.qty) : "over " + formatStock(l.qty - l.orderedQty)} of ${formatStock(l.orderedQty)} ordered</div>`
+              : (l.orderedQty != null ? `<div class="cost-change">as ordered</div>` : "")
+          }</div>
           <button data-dl-remove="${i}" aria-label="Remove">✕</button>
         </div>`;
       }).join("");
+      updateLandedTotal();
       el.querySelectorAll("[data-dl-remove]").forEach(b => b.onclick = () => {
         deliveryLines.splice(parseInt(b.dataset.dlRemove, 10), 1);
         renderDeliveryLines();
@@ -6136,11 +8562,29 @@
     $("dl-total").textContent = peso(total);
   }
 
+  function updateLandedTotal(){
+    const freight = Math.max(0, parseFloat($("dl-freight").value) || 0);
+    const goods = deliveryLines.reduce((sum, l) => sum + l.qty * l.unitCost, 0);
+    const row = $("dl-landedRow");
+    if(!row) return;
+    if(freight > 0 && deliveryLines.length > 0){
+      row.style.display = "flex";
+      $("dl-landedTotal").textContent = peso(goods + freight);
+    } else {
+      row.style.display = "none";
+    }
+  }
+
   async function saveDelivery(){
     const s = supplierById($("dl-supplier").value);
     if(!s){ showToast("Choose a supplier"); return; }
     if(deliveryLines.length === 0){ showToast("Add at least one item"); return; }
     const date = $("dl-date").value || todayISO();
+    const freight = Math.max(0, parseFloat($("dl-freight").value) || 0);
+    const landedLines = spreadFreight(deliveryLines, freight);
+    // What the supplier is owed is the goods only — the hauler is paid
+    // separately, so putting freight on the supplier's bill would overstate
+    // what you owe them and never come off.
     const total = deliveryLines.reduce((sum, l) => sum + l.qty * l.unitCost, 0);
     const consignment = s.terms === "consignment";
     const cod = s.terms === "cod";
@@ -6154,7 +8598,24 @@
       terms: s.terms || "credit",
       consignment,
       dueDate: consignment ? null : (cod ? date : addDays(date, Number(s.creditDays) || 0)),
-      items: deliveryLines.map(l => ({ productId: l.productId, name: l.name, qty: l.qty, unitCost: l.unitCost })),
+      items: landedLines.map(l => ({
+        productId: l.productId, name: l.name, qty: l.qty,
+        unitCost: l.unitCost,
+        freightShare: l.freightShare,
+        landedUnitCost: l.landedUnitCost,
+        expiry: l.expiry || null
+      })),
+      freight: round2(freight),
+      landedTotal: round2(total + freight),
+      // What was asked for against what turned up. Kept on the delivery so the
+      // difference survives as a record rather than a memory.
+      orderId: receivingOrderId || null,
+      shortages: landedLines
+        .filter(l => l.orderedQty != null && l.qty < l.orderedQty)
+        .map(l => ({ productId: l.productId, name: l.name, ordered: l.orderedQty, received: l.qty })),
+      overs: landedLines
+        .filter(l => l.orderedQty != null && l.qty > l.orderedQty)
+        .map(l => ({ productId: l.productId, name: l.name, ordered: l.orderedQty, received: l.qty })),
       total,
       paidAmount: cod ? total : 0,
       status: cod ? "paid" : "unpaid",
@@ -6177,11 +8638,47 @@
       const deltas = {};
       deliveryLines.forEach(l => { deltas[l.productId] = (deltas[l.productId] || 0) + l.qty; });
       Object.keys(deltas).forEach(pid => {
-        batch.update(db.collection("products").doc(pid), {
-          stock: firebase.firestore.FieldValue.increment(deltas[pid])
-        });
+        const update = { stock: firebase.firestore.FieldValue.increment(deltas[pid]) };
+        // Dated lines are remembered so the shelf's age can be worked out
+        // later. Undated ones add stock and nothing else.
+        const dated = deliveryLines.filter(l => l.productId === pid && l.expiry);
+        if(dated.length > 0){
+          const p = products.find(x => x.id === pid);
+          const existing = Array.isArray(p && p.batches) ? p.batches : [];
+          const added = dated.map(l => ({ recv: date, expiry: l.expiry, qty: Number(l.qty) || 0 }));
+          // Kept short: old batches stop mattering once the stock that
+          // followed them has covered the shelf several times over.
+          update.batches = existing.concat(added).slice(-40);
+        }
+        batch.update(db.collection("products").doc(pid), update);
       });
+      if(receivingOrderId){
+        batch.update(db.collection("purchases").doc(receivingOrderId), {
+          status: "received",
+          receivedAt: new Date().toISOString()
+        });
+      }
       await batch.commit();
+      const closedOrder = receivingOrderId;
+      receivingOrderId = null;
+
+      // A short delivery is money you are about to be billed for and did not
+      // get. Saying so at the moment it happens is the only time it is easy to
+      // do something about.
+      const shortLines = landedLines.filter(l => l.orderedQty != null && l.qty < l.orderedQty);
+      if(closedOrder && shortLines.length > 0){
+        const shortValue = shortLines.reduce((sum, l) => sum + (l.orderedQty - l.qty) * l.unitCost, 0);
+        setTimeout(() => {
+          if(confirm(
+            shortLines.length + " line" + (shortLines.length !== 1 ? "s" : "") + " came up short, worth about " + peso(shortValue) + ".\n\n" +
+            "If they billed you for the full order, record a credit now?"
+          )){
+            openCreditSheet(s.id);
+            $("cr-amount").value = round2(shortValue);
+            $("cr-reason").value = "short";
+          }
+        }, 400);
+      }
 
       // Cost prices are written separately: they live in the owner-only store,
       // and a failure here must not be reported as a failed delivery.
@@ -6189,17 +8686,24 @@
         try{
           for(const pid of Object.keys(deltas)){
             const p = products.find(x => x.id === pid);
-            const lines = deliveryLines.filter(l => l.productId === pid);
+            const lines = landedLines.filter(l => l.productId === pid);
             const qty = lines.reduce((a, l) => a + l.qty, 0);
-            const value = lines.reduce((a, l) => a + l.qty * l.unitCost, 0);
+            // Landed, not invoiced — the haul is part of what the goods cost.
+            const value = lines.reduce((a, l) => a + l.qty * l.landedUnitCost, 0);
             const newUnit = qty > 0 ? value / qty : 0;
-            const oldCost = productCosts[pid] ? Number(productCosts[pid].cost) : NaN;
+            const existing = productCosts[pid] || {};
+            const oldCost = Number(existing.cost);
             const oldStock = p ? (Number(p.stock) || 0) : 0;
+            // Weighted average across what was already on the shelf and what
+            // just arrived — the shelf holds both, so one figure has to cover
+            // both. Stock is read before the delivery was added.
             const blended = (isFinite(oldCost) && oldCost > 0 && oldStock > 0)
               ? (oldStock * oldCost + qty * newUnit) / (oldStock + qty)
               : newUnit;
+            const rounded = round2(blended);
             await db.collection("productCosts").doc(pid).set(
-              { cost: Math.round(blended * 100) / 100 }, { merge: true }
+              { cost: rounded, history: costHistoryWith(existing.history, rounded, "delivery") },
+              { merge: true }
             );
           }
         }catch(err){
@@ -6329,6 +8833,8 @@
     on("buyBudgetInput", "oninput", renderOrderPlan);
     on("buyFilterSelect", "onchange", renderOrderPlan);
     on("exportOrderPlanBtn", "onclick", exportOrderPlan);
+    on("startDeliveryFromPlanBtn", "onclick", startDeliveryFromPlan);
+    on("buySupplierSelect", "onchange", renderOrderPlan);
   }
 
   // ---------- Init ----------
@@ -6520,6 +9026,40 @@
     $("prGeneralJournalBtn").onclick = printGeneralJournal;
     $("prGeneralLedgerBtn").onclick = printGeneralLedger;
     $("prSubsidiaryLedgerBtn").onclick = printSubsidiaryLedger;
+    $("dlScpwdBtn").onclick = downloadScpwdReport;
+    $("prScpwdBtn").onclick = printScpwdReport;
+    $("scpwdBtn").onclick = openScpwdSheet;
+    $("scApplyBtn").onclick = applyScpwdDiscount;
+    $("scRemoveBtn").onclick = removeScpwdDiscount;
+    $("dlLossBtn").onclick = downloadLossReport;
+    $("prLossBtn").onclick = printLossReport;
+    $("startCountBtn").onclick = openCountSheet;
+    $("dayActionBtn").onclick = dayActionTapped;
+    $("xReadingBtn").onclick = () => showReading(todayISO(), dayIsClosed(todayISO()));
+    $("dl-freight").addEventListener("input", renderDeliveryLines);
+    $("saveReturnBtn").onclick = saveReturn;
+    $("savePlanAsOrderBtn").onclick = savePlanAsOrder;
+    $("saveCreditBtn").onclick = saveCredit;
+    $("expiryWindowInput").oninput = renderExpiring;
+    $("expiryWindowInput").onchange = saveExpiryWindow;
+    $("saveOpenDayBtn").onclick = saveOpenDay;
+    $("saveCloseDayBtn").onclick = saveCloseDay;
+    $("cd-counted").addEventListener("input", updateCloseVariance);
+    $("cd-float").addEventListener("input", updateCloseVariance);
+    $("printReadingBtn").onclick = printReading;
+    $("journalBtn").onclick = () => downloadJournal(readingDate || todayISO());
+    $("downloadJournalBtn").onclick = () => {
+      const d = $("journalDateInput").value;
+      if(!d){ showToast("Pick a date first"); return; }
+      downloadJournal(d);
+    };
+    $("buyReserveInput").oninput = renderOrderPlan;
+    $("buyCapInput").oninput = renderOrderPlan;
+    $("buyReserveInput").onchange = saveBuyingLimits;
+    $("buyCapInput").onchange = saveBuyingLimits;
+    $("saveCountBtn").onclick = saveCount;
+    $("countScopeSelect").onchange = () => { countScope = $("countScopeSelect").value; renderCountList(); };
+    $("adjustStockInput").addEventListener("input", updateAdjustValueHint);
 
     $("signInBtn").onclick = () => {
       const email = $("authEmail").value.trim();
