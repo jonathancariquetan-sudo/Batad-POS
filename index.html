@@ -173,8 +173,15 @@
     width:100%;aspect-ratio:1/1;border-radius:10px;overflow:hidden;
     background:var(--bg);display:flex;align-items:center;justify-content:center;
     margin-bottom:2px;
+    /* Positioned so the image below can be taken out of the flow. Left in it,
+       a tall photo beats aspect-ratio and stretches the tile, and one portrait
+       product knocks a whole row of the Sell grid out of line. */
+    position:relative;
   }
-  .thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .thumb img{
+    position:absolute;inset:0;
+    width:100%;height:100%;object-fit:cover;display:block;
+  }
   .thumb .placeholder{font-size:26px;opacity:.32;}
   .inv-thumb{
     width:46px;height:46px;border-radius:10px;overflow:hidden;flex:none;
@@ -1395,12 +1402,22 @@
       Show your logo faintly behind the app
     </label>
     <div class="field">
-      <label>Product grid</label>
+      <label>Product card size</label>
       <select id="ds-density">
-        <option value="comfortable">Two across (bigger photos)</option>
-        <option value="compact">Three across (more per screen)</option>
+        <option value="auto">Automatic — shrink as the list grows</option>
+        <option value="comfortable">Large cards</option>
+        <option value="compact">Small cards</option>
       </select>
     </div>
+    <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:-4px 0 10px;">On automatic, a short list gets big cards and a long one gets smaller ones, so customers aren't scrolling forever once you've added hundreds of products. The number across also changes with the phone's screen width on its own.</p>
+    <div class="field">
+      <label>Product photos</label>
+      <select id="ds-photoFit">
+        <option value="fill">Fill the box — crop the edges</option>
+        <option value="whole">Show the whole photo</option>
+      </select>
+    </div>
+    <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:-4px 0 10px;"><b>Fill</b> looks tidiest when photos are square and well cropped. <b>Whole photo</b> never cuts anything off — better for tall bottles or packs photographed at odd sizes, at the cost of some empty space around them.</p>
     <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:-4px 0 10px;">All lettering options use fonts already on the customer's phone, so none of this costs them extra data to load.</p>
     <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:0 0 4px;">Shown here and on your online storefront — customers see this, not your legal business info.</p>
 
@@ -1932,13 +1949,109 @@
   // and every shop would have had to hand-edit manifest.json. This builds one
   // from the store's own settings instead. It only takes effect on a fresh
   // install; an already-installed app keeps whatever it was installed with.
-  function applyDynamicManifest(primary){
+  // ---------- The home-screen icon ----------
+  //
+  // Drawn here rather than shipped as a file. Two reasons, both practical:
+  // the icon then follows whatever theme colour the shop has chosen, so the
+  // thing on the home screen matches the thing that opens; and there is no
+  // PNG to download, rename and upload every time something changes — which
+  // on a phone is the step that actually goes wrong.
+  function roundRectPath(ctx, x, y, w, h, r){
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  // A receipt: ruled lines above a torn edge. Reads at 48px, which is the size
+  // that actually matters on a home screen.
+  function drawReceiptGlyph(ctx, s){
+    ctx.fillStyle = "#FFFFFF";
+    const x0 = s * 0.29, x1 = s * 0.71, y0 = s * 0.23, y1 = s * 0.68;
+    roundRectPath(ctx, x0, y0, x1 - x0, y1 - y0, s * 0.035);
+    ctx.fill();
+    const teeth = 6, w = (x1 - x0) / teeth;
+    ctx.beginPath();
+    ctx.moveTo(x0, y1);
+    for(let i = 0; i < teeth; i++){
+      ctx.lineTo(x0 + w * (i + 0.5), y1 + s * 0.045);
+      ctx.lineTo(x0 + w * (i + 1), y1);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Ruled lines knocked out of the sheet. Without them it is just a white
+    // rectangle at home-screen size and reads as nothing at all.
+    ctx.globalCompositeOperation = "destination-out";
+    const lh = Math.max(2, s * 0.032);
+    const pad = s * 0.07;
+    [[0.32, 1.00], [0.41, 1.00], [0.50, 0.72]].forEach(([top, wide]) => {
+      roundRectPath(ctx, x0 + pad, s * top, (x1 - x0 - pad * 2) * wide, lh, lh / 2);
+      ctx.fill();
+    });
+    // The total line: heavier, and short, the way a printed total sits.
+    roundRectPath(ctx, x0 + pad, s * 0.585, (x1 - x0 - pad * 2) * 0.52, lh * 1.7, lh);
+    ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  function drawAppIcon(size, bg, logoSrc){
+    return new Promise((resolve) => {
+      try{
+        const c = document.createElement("canvas");
+        c.width = c.height = size;
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = bg;
+        roundRectPath(ctx, 0, 0, size, size, size * 0.22);
+        ctx.fill();
+        const done = () => { try{ resolve(c.toDataURL("image/png")); }catch(e){ resolve(null); } };
+        if(logoSrc){
+          const img = new Image();
+          // Android crops a maskable icon to a circle, so the logo stays well
+          // inside the safe zone rather than losing its edges.
+          img.onload = () => {
+            const box = size * 0.60;
+            const k = Math.min(box / img.width, box / img.height);
+            const w = img.width * k, h = img.height * k;
+            ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+            done();
+          };
+          img.onerror = () => { drawReceiptGlyph(ctx, size); done(); };
+          img.src = logoSrc;
+        } else {
+          drawReceiptGlyph(ctx, size);
+          done();
+        }
+      }catch(e){ resolve(null); }
+    });
+  }
+
+  async function applyDynamicManifest(primary){
     try{
       if(!window.Blob || !window.URL || !URL.createObjectURL) return;
       const link = document.querySelector('link[rel="manifest"]');
       if(!link) return;
       const abs = (rel) => new URL(rel, location.href).href;
       const name = designSettings.storeName || "Grocery POS";
+      const bar = mixColor(primary, "#000000", 0.28);
+      // The icon takes the same colour as the status bar, so the home screen
+      // and the app it opens read as one thing.
+      const logo = designSettings.logo || null;
+      const [i192, i512] = await Promise.all([
+        drawAppIcon(192, bar, logo),
+        drawAppIcon(512, bar, logo)
+      ]);
+      if(!i192 || !i512) return;   // keep the static manifest rather than ship a broken one
+      // The tab and bookmark icon too, so nothing is left showing the old one.
+      const fav = document.querySelector('link[rel="icon"]');
+      if(fav) fav.href = i192;
       const manifest = {
         name: name,
         short_name: name.length > 14 ? name.slice(0, 14).trim() : name,
@@ -1948,12 +2061,12 @@
         display: "standalone",
         orientation: "portrait",
         background_color: "#FFFFFF",
-        theme_color: mixColor(primary, "#000000", 0.28),
+        theme_color: bar,
         icons: [
-          { src: abs("icon-192.png"), sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: abs("icon-192.png"), sizes: "192x192", type: "image/png", purpose: "maskable" },
-          { src: abs("icon-512.png"), sizes: "512x512", type: "image/png", purpose: "any" },
-          { src: abs("icon-512.png"), sizes: "512x512", type: "image/png", purpose: "maskable" }
+          { src: i192, sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: i192, sizes: "192x192", type: "image/png", purpose: "maskable" },
+          { src: i512, sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: i512, sizes: "512x512", type: "image/png", purpose: "maskable" }
         ]
       };
       const blob = new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" });
@@ -2104,27 +2217,113 @@
       box.innerHTML = `<div class="margin-note">Nothing readable yet. Each line needs at least a name and a price, separated by a comma.</div>`;
       return;
     }
-    const existing = new Set(products.map(p => p.name.trim().toLowerCase()));
-    const fresh = rows.filter(r => !existing.has(r.name.trim().toLowerCase()));
-    const dupes = rows.length - fresh.length;
-    let html = `<div style="font-size:13px;font-weight:700;margin-bottom:6px;">${fresh.length} product${fresh.length === 1 ? "" : "s"} ready to add</div>`;
-    if(dupes > 0) html += `<div class="margin-note">${dupes} already in your inventory by name — those will be skipped, not duplicated.</div>`;
-    if(errors.length > 0) html += `<div class="margin-note">${errors.length} line${errors.length === 1 ? "" : "s"} skipped: ${escapeHtml(errors.slice(0,3).join("; "))}${errors.length > 3 ? "…" : ""}</div>`;
-    html += `<div style="max-height:190px;overflow-y:auto;margin-top:8px;">`;
-    fresh.slice(0, 40).forEach(r => {
-      html += `<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px;">
-        <span style="min-width:0;">${escapeHtml(r.name)} <span style="color:var(--text-muted);">· ${escapeHtml(r.category)}</span></span>
-        <span style="white-space:nowrap;font-weight:700;">${peso(r.price)} · ${formatStock(r.stock)}</span>
-      </div>`;
+    // Names are matched case- and space-insensitively, because the same product
+    // is rarely typed identically twice.
+    const byName = {};
+    products.forEach(p => { byName[p.name.trim().toLowerCase()] = p; });
+
+    const fresh = [];
+    const changes = [];   // already here, and the pasted figures differ
+    const same = [];      // already here, nothing to change
+
+    rows.forEach(r => {
+      const hit = byName[r.name.trim().toLowerCase()];
+      if(!hit){ fresh.push(r); return; }
+      const priceChanged = Math.abs((Number(hit.price) || 0) - r.price) > 0.005;
+      const stockChanged = Math.abs((Number(hit.stock) || 0) - r.stock) > 0.005;
+      if(priceChanged || stockChanged){
+        changes.push({ row: r, product: hit, priceChanged, stockChanged });
+      } else {
+        same.push(r);
+      }
     });
-    if(fresh.length > 40) html += `<div style="font-size:12px;color:var(--text-muted);padding-top:6px;">…and ${fresh.length - 40} more</div>`;
-    html += `</div>`;
+
+    let html = "";
+    if(errors.length > 0){
+      html += `<div class="margin-note">${errors.length} line${errors.length === 1 ? "" : "s"} skipped: ${escapeHtml(errors.slice(0,3).join("; "))}${errors.length > 3 ? "…" : ""}</div>`;
+    }
+    if(same.length > 0){
+      html += `<div class="margin-note">${same.length} already match what you have — nothing to do for those.</div>`;
+    }
+
     if(fresh.length > 0){
+      html += `<div style="font-size:13px;font-weight:700;margin:10px 0 6px;">${fresh.length} new product${fresh.length === 1 ? "" : "s"} to add</div>`;
+      html += `<div style="max-height:190px;overflow-y:auto;">`;
+      fresh.slice(0, 40).forEach(r => {
+        html += `<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px;">
+          <span style="min-width:0;">${escapeHtml(r.name)} <span style="color:var(--text-muted);">· ${escapeHtml(r.category)}</span></span>
+          <span style="white-space:nowrap;font-weight:700;">${peso(r.price)} · ${formatStock(r.stock)}</span>
+        </div>`;
+      });
+      if(fresh.length > 40) html += `<div style="font-size:12px;color:var(--text-muted);padding-top:6px;">…and ${fresh.length - 40} more</div>`;
+      html += `</div>`;
       html += `<button type="button" class="btn btn-primary" id="confirmImportBtn" style="margin-top:12px;">Add these ${fresh.length} products</button>`;
     }
+
+    // Updating is kept deliberately separate from adding, and every change is
+    // shown as old → new before it happens. An import file that is out of date
+    // would otherwise quietly overwrite prices and stock counts that are
+    // currently correct, and there is no undo for that.
+    if(changes.length > 0){
+      html += `<div style="font-size:13px;font-weight:700;margin:16px 0 6px;">${changes.length} product${changes.length === 1 ? "" : "s"} would change</div>`;
+      html += `<div class="margin-note">Check these before you accept them — this replaces what's in the POS now, and it can't be undone.</div>`;
+      html += `<div style="max-height:220px;overflow-y:auto;margin-top:8px;">`;
+      changes.slice(0, 40).forEach(c => {
+        const bits = [];
+        if(c.priceChanged) bits.push(`${peso(c.product.price)} → <b>${peso(c.row.price)}</b>`);
+        if(c.stockChanged) bits.push(`${formatStock(c.product.stock)} → <b>${formatStock(c.row.stock)}</b> in stock`);
+        html += `<div style="padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;">
+          <div>${escapeHtml(c.row.name)}</div>
+          <div style="color:var(--text-muted);margin-top:2px;">${bits.join(" · ")}</div>
+        </div>`;
+      });
+      if(changes.length > 40) html += `<div style="font-size:12px;color:var(--text-muted);padding-top:6px;">…and ${changes.length - 40} more</div>`;
+      html += `</div>`;
+      html += `<button type="button" class="btn btn-secondary" id="confirmUpdateBtn" style="margin-top:12px;">Update these ${changes.length} products</button>`;
+    }
+
+    if(fresh.length === 0 && changes.length === 0 && same.length === 0){
+      html = `<div class="margin-note">Nothing readable yet. Each line needs at least a name and a price, separated by a comma.</div>`;
+    }
+
     box.innerHTML = html;
-    const btn = $("confirmImportBtn");
-    if(btn) btn.onclick = () => runImport(fresh);
+    const addBtn = $("confirmImportBtn");
+    if(addBtn) addBtn.onclick = () => runImport(fresh);
+    const updBtn = $("confirmUpdateBtn");
+    if(updBtn) updBtn.onclick = () => runImportUpdate(changes);
+  }
+
+  // Only price, stock and category move across. Photos, barcodes, per-piece
+  // settings and cost figures stay as they are — an import list has none of
+  // those, and blanking them would undo work already done here.
+  async function runImportUpdate(changes){
+    const btn = $("confirmUpdateBtn");
+    if(!confirm(`Replace the price and stock of ${changes.length} product${changes.length === 1 ? "" : "s"} with the pasted figures?\n\nThis can't be undone.`)) return;
+    btn.disabled = true;
+    let done = 0;
+    try{
+      for(let i = 0; i < changes.length; i += 200){
+        const chunk = changes.slice(i, i + 200);
+        const batch = db.batch();
+        chunk.forEach(c => {
+          batch.update(db.collection("products").doc(c.product.id), {
+            price: c.row.price,
+            stock: c.row.stock,
+            category: c.row.category || c.product.category || "Uncategorized"
+          });
+        });
+        await batch.commit();
+        done += chunk.length;
+        btn.textContent = "Updated " + done + " of " + changes.length + "…";
+      }
+      $("importText").value = "";
+      $("importPreview").style.display = "none";
+      showToast("Updated " + done + " products");
+    }catch(err){
+      console.error(err);
+      showToast("Stopped after " + done + " — check your connection and try the rest");
+    }
+    btn.disabled = false;
   }
 
   async function runImport(rows){
@@ -2688,15 +2887,17 @@
       const hue = shelf ? (shelf.hue + 150) % 360 : base.hue;
       const primary = hslToHex(hue, 0.46, 0.28);
       const photoShare = products.filter(p => p.thumb || p.image).length / products.length;
-      const density = photoShare >= 0.6 ? "comfortable" : "compact";
+      // Card size is left on automatic: it reads the catalogue every time it
+      // renders, which beats a value frozen on the day this was suggested.
+      const density = "auto";
 
       const reasons = [];
       if(character && score >= 2) reasons.push(`your catalogue reads like <b>${character.label}</b>`);
       if(shelf) reasons.push(`your product photos are mostly <b>${hueName(shelf.hue)}</b>, so the interface takes a deeper, opposite shade and lets them stand out`);
       if(!shelf) reasons.push(`too few product photos to read a colour from, so this comes from the categories alone`);
       reasons.push(photoShare >= 0.6
-        ? `most products have photos, so two larger cards per row`
-        : `most products have no photo yet, so three smaller cards per row fit more on screen`);
+        ? `most products have photos, so cards size themselves to your catalogue automatically`
+        : `most products have no photo yet, so cards stay automatic and the list carries itself on names and prices`);
 
       box.style.display = "block";
       box.className = "margin-readout";
@@ -2744,7 +2945,8 @@
     $("ds-theme").value = designSettings.theme || "custom";
     $("ds-font").value = designSettings.fontStyle || "system";
     $("ds-corners").value = designSettings.corners || "soft";
-    $("ds-density").value = designSettings.density || "comfortable";
+    $("ds-density").value = designSettings.density || "auto";
+    $("ds-photoFit").value = designSettings.photoFit || "fill";
     $("ds-watermark").checked = designSettings.watermark !== false;
     $("ds-minDelivery").value = designSettings.minOrderDelivery != null ? designSettings.minOrderDelivery : "";
     $("ds-minPickup").value = designSettings.minOrderPickup != null ? designSettings.minOrderPickup : "";
@@ -2764,6 +2966,7 @@
       fontStyle: $("ds-font").value,
       corners: $("ds-corners").value,
       density: $("ds-density").value,
+      photoFit: $("ds-photoFit").value,
       watermark: $("ds-watermark").checked,
       logo: currentLogoData || null,
       // Read by the public storefront to block checkouts that are too small to

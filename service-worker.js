@@ -1,15 +1,29 @@
-const CACHE_NAME = "grocery-pos-v33";
+const CACHE_NAME = "grocery-pos-v36";
 const APP_SHELL = [
   "./index.html",
   "./manifest.json",
-  "./firebase-config.js",
-  "./icon-192.png",
-  "./icon-512.png"
+  "./firebase-config.js"
 ];
 
+// Files are cached one at a time, and a failure is tolerated.
+//
+// The previous version used cache.addAll, which rejects the whole batch if any
+// single file 404s. The icon files it listed were never in the repository, so
+// installation failed every time and the service worker never activated at
+// all — no offline support, and updates that only a manual cache clear could
+// shift. Caching each file separately means one missing file costs that file
+// and nothing else.
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(
+        APP_SHELL.map((url) =>
+          cache.add(url).catch((err) => {
+            console.warn("[sw] could not cache", url, err);
+          })
+        )
+      )
+    )
   );
   self.skipWaiting();
 });
