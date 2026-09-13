@@ -3,25 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Grocery POS</title>
+<title>Tindahan ni Gloria POS</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#164F30">
+<meta name="theme-color" content="#2A1746">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Grocery POS">
+<meta name="apple-mobile-web-app-title" content="Tindahan POS">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png">
 <style>
   :root{
-    --bg:#F4F6F1;
+    --bg:#F6F4F9;
     --surface:#FFFFFF;
-    --border:#DCE1D6;
-    --text:#1F2A22;
-    --text-muted:#62705F;
-    --primary:#1F6E43;
-    --primary-dark:#164F30;
-    --primary-tint:#E4F0E8;
+    --border:#E0DAE8;
+    --text:#231E2B;
+    --text-muted:#6A6178;
+    --primary:#3A2160;
+    --primary-dark:#2A1746;
+    --primary-tint:#EFEAF6;
     --accent:#C98A1F;
     --accent-tint:#FBF0DC;
     --danger:#B3403A;
@@ -606,7 +606,7 @@
       <span id="authLogoEmoji">🛒</span>
       <img id="authLogoImg" alt="" style="width:48px;height:48px;border-radius:12px;object-fit:cover;display:none;">
     </div>
-    <h1 id="authStoreName">Grocery POS</h1>
+    <h1 id="authStoreName">Tindahan ni Gloria</h1>
     <p class="sub">Sign in to manage your store</p>
     <div class="field"><label>Email</label><input type="email" id="authEmail" autocomplete="username"></div>
     <div class="field"><label>Password</label><input type="password" id="authPassword" autocomplete="current-password"></div>
@@ -626,7 +626,7 @@
   <div class="row">
     <div style="display:flex;align-items:center;gap:8px;min-width:0;">
       <img id="headerLogoImg" alt="" style="width:24px;height:24px;border-radius:7px;object-fit:cover;display:none;flex:none;">
-      <h1 id="headerStoreName" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Grocery POS</h1>
+      <h1 id="headerStoreName" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Tindahan ni Gloria</h1>
     </div>
     <span class="date" id="headerDate"></span>
   </div>
@@ -1734,7 +1734,7 @@
   let bizSettings = { name:"", address:"", tin:"", taxType:"non_vat", accreditation:"" };
   let reportQuarter = null; // {year, q} — set on init to the current quarter
   let reportSalesCache = []; // sales fetched for the currently-viewed quarter
-  let designSettings = { storeName:"", tagline:"", primaryColor:"#1F6E43", logo:null };
+  let designSettings = { storeName:"", tagline:"", primaryColor:"#3A2160", logo:null };
   let editingZoneIndex = null; // index into designSettings.deliveryZones, or null for a new one
   const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   let currentLogoData = null; // data URL for the store-design form's logo, or null
@@ -2033,13 +2033,39 @@
     });
   }
 
+  // Only the status-bar colour and the tab icon are set here now.
+  //
+  // This used to replace the whole manifest with one built in the browser, so
+  // the installed icon could follow the shop's theme. It cost more than it was
+  // worth: installing a real app requires Google's servers to fetch the
+  // manifest and its icons, and they cannot fetch something that exists only
+  // inside this phone's browser — so Chrome quietly downgraded every install
+  // to a plain shortcut with a Chrome badge on it. The manifest is now a real
+  // file with real icon files beside it, and installing produces an actual
+  // app. Changing the theme no longer repaints the installed icon; that needs
+  // new icon files, which is a fair trade for an app that installs properly.
   async function applyDynamicManifest(primary){
     try{
+      const barColor = mixColor(primary, "#000000", 0.28);
+      const metaThemeEl = document.querySelector('meta[name="theme-color"]');
+      if(metaThemeEl) metaThemeEl.setAttribute("content", barColor);
+      const favEl = document.querySelector('link[rel="icon"]');
+      if(favEl){
+        const small = await drawAppIcon(192, barColor, designSettings.logo || null);
+        if(small) favEl.href = small;
+      }
+      return;
+      /* eslint-disable no-unreachable */
       if(!window.Blob || !window.URL || !URL.createObjectURL) return;
       const link = document.querySelector('link[rel="manifest"]');
       if(!link) return;
       const abs = (rel) => new URL(rel, location.href).href;
-      const name = designSettings.storeName || "Grocery POS";
+      // Both apps take their name from the same store settings, so without a
+      // suffix the till and the shop install under one identical name and the
+      // only way to tell them apart on the phone is the icon. The customer-
+      // facing store keeps the plain name; the staff-facing till is marked.
+      const storeName = designSettings.storeName || "Grocery";
+      const name = storeName + " POS";
       const bar = mixColor(primary, "#000000", 0.28);
       // The icon takes the same colour as the status bar, so the home screen
       // and the app it opens read as one thing.
@@ -2054,7 +2080,9 @@
       if(fav) fav.href = i192;
       const manifest = {
         name: name,
-        short_name: name.length > 14 ? name.slice(0, 14).trim() : name,
+        // Home-screen labels are truncated around 12 characters, so the short
+        // name keeps the "POS" and gives up store-name letters instead.
+        short_name: (storeName.length > 8 ? storeName.slice(0, 8).trim() : storeName) + " POS",
         description: "Point of sale, inventory and online orders",
         start_url: abs("./index.html"),
         scope: abs("./"),
@@ -2124,9 +2152,41 @@
     document.body.style.backgroundAttachment = "fixed";
   }
 
+  // The sign-in screen has to paint before Firestore has answered, and the
+  // shop's colours live in Firestore — so the first frame was always the
+  // built-in defaults, and the whole till repainted a second later. That flash
+  // of somebody else's branding is the first thing anyone sees on opening the
+  // app. The cosmetic settings are therefore kept in this phone's browser as
+  // well and painted immediately, with the live copy still arriving and still
+  // winning. Nothing here affects a sale, a price or a stock figure: only the
+  // name, the tagline and the colour, so a stale copy costs nothing but a
+  // slightly out-of-date title until the real one lands. The logo is left out
+  // deliberately — it is a large image and not worth the storage.
+  const DESIGN_CACHE_KEY = "pos-design-v1";
+
+  function rememberDesign(){
+    try{
+      localStorage.setItem(DESIGN_CACHE_KEY, JSON.stringify({
+        storeName: designSettings.storeName || "",
+        tagline: designSettings.tagline || "",
+        primaryColor: designSettings.primaryColor || ""
+      }));
+    }catch(e){ /* private mode, or storage full — the app works without it */ }
+  }
+
+  function applyRememberedDesign(){
+    let saved = null;
+    try{ saved = JSON.parse(localStorage.getItem(DESIGN_CACHE_KEY) || "null"); }catch(e){ saved = null; }
+    if(!saved || typeof saved !== "object") return;
+    if(saved.storeName) designSettings.storeName = saved.storeName;
+    if(saved.tagline) designSettings.tagline = saved.tagline;
+    if(saved.primaryColor) designSettings.primaryColor = saved.primaryColor;
+    applyDesignSettings();
+  }
+
   function applyDesignSettings(){
     const root = document.documentElement;
-    const primary = hexToRgb(designSettings.primaryColor) ? designSettings.primaryColor : "#1F6E43";
+    const primary = hexToRgb(designSettings.primaryColor) ? designSettings.primaryColor : "#3A2160";
     root.style.setProperty("--primary", primary);
     root.style.setProperty("--primary-dark", mixColor(primary, "#000000", 0.28));
     root.style.setProperty("--primary-tint", mixColor(primary, "#FFFFFF", 0.88));
@@ -2135,7 +2195,7 @@
     applyDynamicManifest(primary);
     applyWatermark();
 
-    const name = designSettings.storeName || "Grocery POS";
+    const name = designSettings.storeName || "Tindahan ni Gloria";
     document.title = name;
     const headerName = $("headerStoreName"); if(headerName) headerName.textContent = name;
     const authName = $("authStoreName"); if(authName) authName.textContent = name;
@@ -2158,7 +2218,7 @@
     const el = $("designSummary");
     if(!el) return;
     if(!designSettings.storeName){
-      el.textContent = "Still using the default \"Grocery POS\" name — add your store's name so customers see it.";
+      el.textContent = "No store name saved yet — set one so it shows on receipts and on the customer's store.";
       return;
     }
     el.innerHTML = `<div><b>${escapeHtml(designSettings.storeName)}</b></div>${designSettings.tagline ? `<div>${escapeHtml(designSettings.tagline)}</div>` : ""}`;
@@ -2759,7 +2819,7 @@
   // Every preset is dark enough for white label text (4.5:1 or better), and so
   // is the 28%-darker shade used for the phone's status bar.
   const THEME_PRESETS = {
-    market:   "#1F6E43",
+    market:   "#3A2160",
     teal:     "#14746F",
     ocean:    "#1C5D92",
     indigo:   "#36459B",
@@ -2939,7 +2999,7 @@
   function openStoreDesignSheet(){
     $("ds-name").value = designSettings.storeName || "";
     $("ds-tagline").value = designSettings.tagline || "";
-    $("ds-color").value = hexToRgb(designSettings.primaryColor) ? designSettings.primaryColor : "#1F6E43";
+    $("ds-color").value = hexToRgb(designSettings.primaryColor) ? designSettings.primaryColor : "#3A2160";
     const tp = $("themeProposal");
     if(tp){ tp.style.display = "none"; tp.innerHTML = ""; }
     $("ds-theme").value = designSettings.theme || "custom";
@@ -3250,8 +3310,9 @@
     // Store name/logo/color are readable even before sign-in (see firestore.rules),
     // so the auth screen itself can already show the store's own branding.
     db.collection("settings").doc("design").onSnapshot((doc) => {
-      designSettings = doc.exists ? Object.assign({ storeName:"", tagline:"", primaryColor:"#1F6E43", logo:null }, doc.data()) : { storeName:"", tagline:"", primaryColor:"#1F6E43", logo:null };
+      designSettings = doc.exists ? Object.assign({ storeName:"", tagline:"", primaryColor:"#3A2160", logo:null }, doc.data()) : { storeName:"", tagline:"", primaryColor:"#3A2160", logo:null };
       applyDesignSettings();
+      rememberDesign();
       renderDesignSummary();
       renderFeatureToggles();
       applyFeatureUI();
@@ -6475,6 +6536,7 @@
   }
 
   function init(){
+    applyRememberedDesign();
     setupInstallPrompt();
     setHeaderDate();
     reportQuarter = currentQuarterOf(new Date());

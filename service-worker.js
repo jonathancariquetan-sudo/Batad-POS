@@ -1,8 +1,9 @@
-const CACHE_NAME = "grocery-pos-v36";
+const CACHE_NAME = "grocery-pos-v39";
 const APP_SHELL = [
   "./index.html",
   "./manifest.json",
-  "./firebase-config.js"
+  "./firebase-config.js",
+  "./app-icon-pos.png"
 ];
 
 // Files are cached one at a time, and a failure is tolerated.
