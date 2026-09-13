@@ -5961,7 +5961,10 @@
 
   function businessDateOf(sale){
     if(sale.businessDate) return sale.businessDate;
-    return (sale.timestamp || "").slice(0, 10);   // older sales predate the field
+    // Sales recorded before the business date existed carry only a UTC
+    // timestamp, so it is converted to the local day here rather than sliced,
+    // which would put an evening's trade on the wrong date.
+    return sale.timestamp ? dayKeyOf(sale.timestamp) : "";
   }
 
   function salesForDay(date){
@@ -7668,7 +7671,20 @@
   const DEAD_DAYS = 45;        // no sale in this long with stock on hand
 
   function supplierById(id){ return suppliers.find(s => s.id === id) || null; }
-  function todayISO(){ return new Date().toISOString().slice(0, 10); }
+  // The business date, in YOUR time, not the world's.
+  //
+  // toISOString() reports UTC, and Batad is eight hours ahead of it. Using it
+  // meant the POS thought the day changed at eight in the morning: a sale rung
+  // at 6am was filed under yesterday, and a Z-reading taken at breakfast
+  // sealed a day that was still trading. Every date the shop records — the
+  // business day, a delivery, an expiry, a credit — is a local calendar date
+  // and is built from local parts.
+  function todayISO(){
+    const d = new Date();
+    return d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0");
+  }
   function daysAgo(n){ const d = new Date(); d.setDate(d.getDate() - n); return d; }
   function addDays(dateStr, n){
     const d = new Date(dateStr + "T00:00:00");
@@ -9082,7 +9098,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v50";
+  const APP_VERSION = "v51";
 
   function init(){
     applyRememberedDesign();
