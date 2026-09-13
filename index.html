@@ -1080,6 +1080,12 @@
       <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:10px 0 0;">Keep this with your books. The discounts you grant are deducted from your gross sales before tax, and BIR expects the name, ID number and amount behind each one — which is what this list holds.</p>
     </div>
 
+    <div class="section-label">This app</div>
+    <div class="report-card">
+      <div class="report-row"><span>Version</span><span id="appVersionLabel">—</span></div>
+      <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:8px 0 0;">Worth noting in your change log whenever you update, along with anything that changed on the receipt, the tax settings or the invoice. You are both the software supplier and the taxpayer here, so that record is yours to keep.</p>
+    </div>
+
     <div class="section-label">Making this legally official</div>
     <div class="report-card">
       <p style="font-size:13px;color:var(--text-muted);line-height:1.65;margin:0 0 10px;">Printing a document doesn't make it BIR-legal on its own — only your BIR Regional District Office (RDO) can actually approve/stamp these. This POS gets the paperwork ready; these steps are still yours to do in person or via your RDO/accountant:</p>
@@ -3744,6 +3750,7 @@
 
     managerListenerUnsubs.push(db.collection("sales").orderBy("timestamp", "desc").limit(2000).onSnapshot((snap) => {
       sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderDayCard();
       renderDashboard();
       renderMarginReport();
       renderZoneEconomics();
@@ -3788,12 +3795,12 @@
       renderStaffList();
     }, (err) => { console.error(err); }));
 
-    managerListenerUnsubs.push(db.collection("dayOpenings").orderBy(firebase.firestore.FieldPath.documentId(), "desc").limit(120).onSnapshot((snap) => {
+    managerListenerUnsubs.push(db.collection("dayOpenings").orderBy("date", "desc").limit(120).onSnapshot((snap) => {
       dayOpenings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderDayCard();
     }, (err) => { console.error(err); }));
 
-    managerListenerUnsubs.push(db.collection("dayClosings").orderBy(firebase.firestore.FieldPath.documentId(), "desc").limit(120).onSnapshot((snap) => {
+    managerListenerUnsubs.push(db.collection("dayClosings").orderBy("date", "desc").limit(120).onSnapshot((snap) => {
       dayClosings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderDayCard();
       renderZHistory();
@@ -9075,8 +9082,13 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
+  const APP_VERSION = "v50";
+
   function init(){
     applyRememberedDesign();
+    const vEl = $("appVersionLabel");
+    if(vEl) vEl.textContent = APP_VERSION;
+    renderDayCard();
     setupInstallPrompt();
     setHeaderDate();
     reportQuarter = currentQuarterOf(new Date());
