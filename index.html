@@ -870,6 +870,15 @@
     </div>
     </div>
 
+    <div id="stockValueBlock">
+    <div class="section-label">What's sitting on the shelves</div>
+    <div class="report-card">
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 12px;">Stock is cash in another shape. A shop can make money on every sale and still have none, because the money is in boxes behind the counter.</p>
+      <div id="stockValueSummary"></div>
+      <div id="stockValueNotes"></div>
+    </div>
+    </div>
+
     <div id="marginBlock">
     <div class="section-label" style="margin-top:0;">Profit margins</div>
     <div class="report-card">
@@ -2886,6 +2895,33 @@
     renderExpenseList(p);
   }
 
+  function renderStockValue(){
+    const sum = $("stockValueSummary"), notes = $("stockValueNotes");
+    if(!sum || !notes) return;
+    const v = inventoryValue();
+
+    sum.innerHTML = `
+      <div class="report-row"><span>Cash locked up, at cost</span><span>${v.costed ? peso(v.atCost) : "not known yet"}</span></div>
+      <div class="report-row"><span>Worth, at your selling prices</span><span>${peso(v.atRetail)}</span></div>
+      <div class="report-row total"><span>Profit waiting in the stock</span><span>${v.costed ? peso(v.lockedProfit) : "—"}</span></div>
+    `;
+
+    const out = [];
+    if(v.uncosted > 0){
+      out.push(v.uncosted + " of your " + v.total + " products have no cost recorded"
+        + (v.coverage != null ? ", so the cost figure covers only about " + v.coverage.toFixed(0) + "% of what's on the shelves by value" : "")
+        + ". Until that's filled in, treat the first two lines as a floor, not a total.");
+    }
+    if(v.costed > 0 && v.holdings.length){
+      out.push("<b>Most cash tied up:</b> " + v.holdings
+        .map(h => escapeHtml(h.name) + " " + peso(h.tied))
+        .join(" · ") + ". These are the ones worth counting carefully and reordering cautiously — a slow mover here costs more than a fast mover running out.");
+    }
+    notes.innerHTML = out
+      .map(n => `<p style="font-size:12px;color:var(--text-muted);line-height:1.6;margin:10px 0 0;">${n}</p>`)
+      .join("");
+  }
+
   function renderExpenseList(p){
     const el = $("expenseList");
     if(!el) return;
@@ -3328,7 +3364,7 @@
     // This runs last on purpose: it must win over the feature toggles above.
     if(currentUserRole !== "owner"){
       ["pricingHelperBlock","competitorDisclaimer","marginBlock",
-       "pricingHelperSection","staffBlock","birBlock","pnlBlock",
+       "pricingHelperSection","staffBlock","birBlock","pnlBlock","stockValueBlock",
        // "Edit full details" opens the product form, where price and name
        // live. Firestore refuses a manager that write, so the button would
        // only ever produce an error — better it isn't there.
@@ -4210,6 +4246,7 @@
       updateCostSecurityStatus();
       updateThumbStatus();
       renderMarginReport();
+      renderStockValue();
       renderBuyingView();
     }, (err) => { console.error(err); showToast("Couldn't load products"); }));
 
@@ -4333,6 +4370,7 @@
       snap.docs.forEach(d => { productCosts[d.id] = d.data(); });
       renderMarginReport();
       renderPnl();
+      renderStockValue();
       renderInventory();
       renderBuyingView();
     }, (err) => { console.error(err); }));
@@ -5433,6 +5471,54 @@
     });
     if(monthly <= 0) return null;
     return monthly / daysInMonth(ym);
+  }
+
+  // ---------- What is sitting on the shelves ----------
+  //
+  // Stock is cash in another shape. A shop can be profitable on every sale and
+  // still have no money, because the money is in boxes behind the counter —
+  // which is why this is a separate figure from profit and not a version of it.
+  //
+  // Two numbers, and they answer different questions. At COST is what you
+  // actually paid, so it is the cash locked up. At RETAIL is what it would
+  // fetch if every last piece sold, which never quite happens — so it is the
+  // optimistic bound, useful for insurance and for arguing with yourself.
+  //
+  // Coverage is reported alongside, because a total built from a third of the
+  // catalogue is not a small version of the truth; it is a different number
+  // wearing its clothes.
+  function inventoryValue(){
+    let atCost = 0, atRetail = 0, costedRetail = 0;
+    let costed = 0, uncosted = 0;
+    const holdings = [];
+    products.forEach(p => {
+      const stock = Number(p.stock) || 0;
+      const price = Number(p.price) || 0;
+      const retail = stock * price;
+      atRetail += retail;
+      const c = productCosts[p.id];
+      const cost = c ? Number(c.cost) : NaN;
+      if(isFinite(cost) && cost > 0){
+        costed++;
+        const tied = stock * cost;
+        atCost += tied;
+        costedRetail += retail;
+        if(stock > 0) holdings.push({ name: p.name, tied, stock, margin: retail - tied });
+      } else {
+        uncosted++;
+      }
+    });
+    holdings.sort((a, b) => b.tied - a.tied);
+    return {
+      atCost, atRetail, costedRetail,
+      costed, uncosted, total: products.length,
+      // What share of the shelves the cost figure actually speaks for, by value
+      // rather than by product count — one uncosted sack of rice matters more
+      // than twenty uncosted sachets.
+      coverage: atRetail > 0 ? (costedRetail / atRetail) * 100 : null,
+      lockedProfit: costedRetail - atCost,
+      holdings: holdings.slice(0, 5)
+    };
   }
 
   // Store-wide gross margin over the last 30 days, weighted by what actually
@@ -9889,7 +9975,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v55";
+  const APP_VERSION = "v56";
 
   function init(){
     applyRememberedDesign();
