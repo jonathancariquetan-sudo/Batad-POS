@@ -612,6 +612,7 @@
     <div class="field"><label>Password</label><input type="password" id="authPassword" autocomplete="current-password"></div>
     <div class="auth-error" id="authError"></div>
     <button class="btn btn-primary" id="signInBtn">Sign in</button>
+    <button type="button" id="forgotBtn" style="background:none;border:none;padding:10px 0 0;width:100%;font:inherit;font-size:13px;color:var(--text-muted);text-decoration:underline;cursor:pointer;">Forgot your password?</button>
     <div id="installRow" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
       <button type="button" class="btn btn-secondary" id="installBtn">Install on this phone</button>
       <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:8px 0 0;">Adds it to your home screen and runs it full screen, without the browser bar.</p>
@@ -848,6 +849,27 @@
       This generates BIR-style sales invoices, books of accounts, and tax estimates straight from the sales recorded in this POS, to make audits and BIR filing easier. It can't replace an independent CPA's audited financial statements, real bank statements from your bank, or a full payroll system — those need a professional/your bank, not just software. Review everything here with your bookkeeper or accountant before filing.
     </div>
 
+    <div id="pnlBlock">
+    <div class="section-label" style="margin-top:0;">What the shop actually made</div>
+    <div class="report-card">
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 12px;">Gross profit is what the goods earned. Net profit is what the shop earned, after rent, electricity, wages and the rest. Record those below and this becomes the real figure.</p>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Month</label>
+        <select id="pnlMonthSelect"></select>
+      </div>
+      <div id="pnlSummary"></div>
+      <div id="pnlBreakdown" style="margin-top:12px;"></div>
+      <div class="btn-row" style="margin-top:12px;">
+        <button class="btn btn-secondary" id="addExpenseBtn" style="flex:1;">Record a cost</button>
+        <button class="btn btn-secondary" id="addOwnerCashBtn" style="flex:1;">Owner money</button>
+      </div>
+    </div>
+    <div class="report-card">
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 10px;">Entries this month. Nothing here can be edited — a mistake is cancelled with a reversal, so both the error and the correction stay visible.</p>
+      <div id="expenseList"></div>
+    </div>
+    </div>
+
     <div id="marginBlock">
     <div class="section-label" style="margin-top:0;">Profit margins</div>
     <div class="report-card">
@@ -876,7 +898,9 @@
     <div id="staffBlock">
     <div class="section-label">Staff & manager accounts</div>
     <div class="report-card">
-      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 10px;">Give each person their own sign-in so every sale/invoice records who rang it up. <b>Staff</b> only get the Sell tab. <b>Managers</b> also get the Sales dashboard, but not Inventory, Orders, or Reports. Only you can add, disable, or re-enable these accounts.</p>
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 10px;">Give each person their own sign-in so every sale and invoice records who rang it up.</p>
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 10px;"><b>Staff</b> get the Sell tab and nothing else. <b>Managers</b> also get Inventory, the online order queue and the Sales dashboard — they can book in deliveries, correct stock, open and close the day, and approve returns and senior/PWD discounts. Neither ever sees what anything cost you, what you owe a supplier, or what you make on a sale: that is blocked in the database, not just hidden on screen.</p>
+      <div id="seatCounts" style="font-size:12px;color:var(--text-muted);margin:0 0 10px;"></div>
       <div id="staffList" style="margin-bottom:12px;"></div>
       <button class="btn btn-secondary" id="addStaffBtn">Add staff or manager account</button>
     </div>
@@ -1631,6 +1655,43 @@
   </div>
 </div>
 
+<div class="sheet" id="expenseSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2 id="expenseSheetTitle">Record a cost</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:0 0 14px;" id="expenseSheetIntro">Rent, electricity, wages and anything else it costs to keep the shop open. These come off your gross profit to give the real figure.</p>
+    <div id="ownerCashKindField" class="field" style="display:none;">
+      <label>Which way is the money going?</label>
+      <select id="ex-kind">
+        <option value="ownerDraw">I took money out of the shop</option>
+        <option value="ownerAdvance">I put my own money in</option>
+      </select>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Neither one changes net profit. Taking your wages out isn't a cost of trading, and putting money in isn't income — recording them separately keeps the profit figure honest and still shows where the cash went.</p>
+    </div>
+    <div id="expenseCategoryField" class="field">
+      <label>What kind of cost</label>
+      <select id="ex-category"></select>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Amount (₱)</label>
+        <input type="number" id="ex-amount" inputmode="decimal" placeholder="0.00">
+      </div>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="ex-date">
+      </div>
+    </div>
+    <div class="field">
+      <label>Note (optional)</label>
+      <input type="text" id="ex-note" placeholder="e.g. September bill, Meralco">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveExpenseBtn">Record it</button>
+    </div>
+  </div>
+</div>
+
 <div class="sheet" id="storeDesignSheet">
   <div class="sheet-handle"></div>
   <div class="sheet-header"><h2>Store name &amp; design</h2><button class="sheet-close" data-close>✕</button></div>
@@ -1686,6 +1747,32 @@
       <label>Primary color</label>
       <input type="color" id="ds-color" style="height:44px;padding:4px;">
     </div>
+
+    <div class="section-label" style="margin:14px 0 8px;">Home screen icons</div>
+    <div style="display:flex;gap:18px;align-items:center;margin-bottom:10px;">
+      <div style="text-align:center;">
+        <img id="iconPreviewPos" alt="POS app icon preview" style="width:72px;height:72px;border-radius:16px;display:block;background:#eee;">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:5px;">Till</div>
+      </div>
+      <div style="text-align:center;">
+        <img id="iconPreviewStore" alt="Online store app icon preview" style="width:72px;height:72px;border-radius:16px;display:block;background:#eee;">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:5px;">Shop</div>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:0;flex:1;">These follow the colour and logo above. They update as you change them.</p>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;">
+      <input type="checkbox" id="ds-logoOnTill" style="width:auto;">
+      Put my logo on the till icon too
+    </label>
+    <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:-4px 0 10px;">Off by default: your logo goes on the shop and the till keeps the receipt, so the two apps never look identical on your home screen. Both take the colour either way.</p>
+    <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:0 0 10px;">An installed app's icon is fixed on the day you install it — the phone can't repaint it later. To change it you download the new icon, put it in the app's folder on GitHub, then remove the app from your home screen and add it again.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+      <button type="button" class="btn btn-secondary" id="dlIconPos" style="flex:1 1 45%;">Till icon</button>
+      <button type="button" class="btn btn-secondary" id="dlManifestPos" style="flex:1 1 45%;">Till manifest</button>
+      <button type="button" class="btn btn-secondary" id="dlIconStore" style="flex:1 1 45%;">Shop icon</button>
+      <button type="button" class="btn btn-secondary" id="dlManifestStore" style="flex:1 1 45%;">Shop manifest</button>
+    </div>
+    <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:0 0 4px;">Download the two <b>Till</b> files into <b>Batad-POS</b>, and the two <b>Shop</b> files into <b>Batad-Store</b>. Save the design first — the files are built from what's on this screen.</p>
     <div class="field-row">
       <div class="field">
         <label>Lettering</label>
@@ -1923,10 +2010,11 @@
       <label>Role</label>
       <select id="sf-role">
         <option value="staff">Staff — Sell tab only</option>
-        <option value="manager">Manager — Sell + Sales dashboard</option>
+        <option value="manager">Manager — Sell, Inventory, Orders, Sales</option>
       </select>
+      <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;" id="sf-seatHint"></p>
     </div>
-    <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:0 0 4px;">Share this email and password with them so they can sign in on their own device. Only you can add, disable, or re-enable staff and manager accounts.</p>
+    <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:0 0 4px;">Share this email and password with them so they can sign in on their own device. Only an owner can add, remove, disable or re-enable these accounts — and a role can't be changed afterwards, so pick it correctly now. To change someone's role, remove the account and make it again.</p>
     <div class="btn-row">
       <button class="btn btn-primary" id="createStaffBtn">Create account</button>
     </div>
@@ -2074,17 +2162,41 @@
   let dayOpenings = []; // {id:YYYY-MM-DD, float, byName, openedAt}
   let dayClosings = []; // {id:YYYY-MM-DD, zNumber, expectedCash, countedCash, variance, ...}
   let productCosts = {}; // productId -> {cost,opCost,markup,competitorPrice} — owner only
+  let expenses = []; // running costs + owner draws/advances — owner only, immutable
+  let pnlMonth = null; // which month the P&L block is showing; null = this month
   let marginSort = "worst";
 
-  // The single account that owns this store. Must match the owner email in
-  // firestore.rules exactly — the rules are what actually enforce this; the
-  // check here only stops an unrecognised account from being shown an owner
-  // screen it has no permission to use.
-  const OWNER_EMAIL = "jonathancariquetan@gmail.com";
+  // The accounts that own this store — both have identical, unrestricted
+  // control from any device. Must match the owner list in firestore.rules
+  // exactly: the rules are what actually enforce this, and the check here only
+  // stops an unrecognised account from being shown an owner screen it has no
+  // permission to use.
+  const OWNER_EMAILS = [
+    "jonathancariquetan@gmail.com",
+    "ryu2028@gmail.com"
+  ].map(e => e.trim().toLowerCase()).filter(e => e && e.indexOf("@") > 0);
   function isOwnerAccount(){
     const u = auth && auth.currentUser;
-    return !!(u && u.email && u.email.toLowerCase() === OWNER_EMAIL.toLowerCase());
+    return !!(u && u.email && OWNER_EMAILS.indexOf(u.email.trim().toLowerCase()) !== -1);
   }
+
+  // How many people can hold each role at once. These names are the seat ids
+  // in Firestore — the database will not accept any others, so the limit holds
+  // even if this screen is bypassed. See the seat block in firestore.rules.
+  const MANAGER_SEATS = ["manager-1","manager-2"];
+  const STAFF_SEATS   = ["staff-1","staff-2","staff-3","staff-4","staff-5"];
+  function seatPool(role){ return role === "manager" ? MANAGER_SEATS : STAFF_SEATS; }
+  function freeSeat(role){
+    const mine = staffList.filter(s => s.role === role);
+    const pool = seatPool(role);
+    // Any account created before seats existed carries no seat id, but it is
+    // still a person working here. Counting heads as well as ids stops a shop
+    // that already had five staff from quietly adding five more.
+    if(mine.length >= pool.length) return null;
+    const taken = mine.map(s => s.seat);
+    return pool.find(s => taken.indexOf(s) === -1) || null;
+  }
+  function seatsUsed(role){ return staffList.filter(s => s.role === role).length; }
 
   const $ = (id) => document.getElementById(id);
   const peso = (n) => "₱" + Number(n || 0).toLocaleString("en-PH", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -2326,7 +2438,24 @@
     ctx.globalCompositeOperation = "source-over";
   }
 
-  function drawAppIcon(size, bg, logoSrc){
+  // A shopping bag, for the customer-facing app. It has to be tellable from
+  // the till's receipt at 48px on a home screen — that is the only size that
+  // decides whether an icon works — so the silhouette does the work and no
+  // detail is relied on.
+  function drawBagGlyph(ctx, s){
+    ctx.fillStyle = "#FFFFFF";
+    const x0 = s * 0.28, x1 = s * 0.72, yTop = s * 0.40, yBot = s * 0.77;
+    roundRectPath(ctx, x0, yTop, x1 - x0, yBot - yTop, s * 0.055);
+    ctx.fill();
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = s * 0.06;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(s * 0.5, yTop + s * 0.005, s * 0.12, Math.PI, 0);
+    ctx.stroke();
+  }
+
+  function drawAppIcon(size, bg, logoSrc, glyph){
     return new Promise((resolve) => {
       try{
         const c = document.createElement("canvas");
@@ -2335,6 +2464,7 @@
         ctx.fillStyle = bg;
         roundRectPath(ctx, 0, 0, size, size, size * 0.22);
         ctx.fill();
+        const drawGlyph = () => (glyph === "bag" ? drawBagGlyph(ctx, size) : drawReceiptGlyph(ctx, size));
         const done = () => { try{ resolve(c.toDataURL("image/png")); }catch(e){ resolve(null); } };
         if(logoSrc){
           const img = new Image();
@@ -2347,10 +2477,10 @@
             ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
             done();
           };
-          img.onerror = () => { drawReceiptGlyph(ctx, size); done(); };
+          img.onerror = () => { drawGlyph(); done(); };
           img.src = logoSrc;
         } else {
-          drawReceiptGlyph(ctx, size);
+          drawGlyph();
           done();
         }
       }catch(e){ resolve(null); }
@@ -2375,7 +2505,13 @@
       if(metaThemeEl) metaThemeEl.setAttribute("content", barColor);
       const favEl = document.querySelector('link[rel="icon"]');
       if(favEl){
-        const small = await drawAppIcon(192, barColor, designSettings.logo || null);
+        // The browser-tab icon follows the same rule as the till's home-screen
+        // icon, so the two never disagree about what the till looks like.
+        const small = await drawAppIcon(
+          192, barColor,
+          designSettings.logoOnTill === true ? (designSettings.logo || null) : null,
+          "receipt"
+        );
         if(small) favEl.href = small;
       }
       return;
@@ -2538,6 +2674,325 @@
     });
   }
 
+  // ---------- Home-screen icons ----------
+  //
+  // Why these are downloads rather than something the app just does: installing
+  // a real app makes Google's servers fetch the manifest and its icons, and
+  // they cannot fetch something that exists only inside this phone. An icon
+  // built in the browser therefore installs as a Chrome-badged shortcut, not an
+  // app — which is exactly the bug we already fixed once. So the app draws the
+  // files and hands them over; they become real icons when they reach GitHub.
+
+  // Reads the design sheet as it stands right now, not what was last saved, so
+  // the preview answers "what am I about to get" rather than "what did I have".
+  function iconThemeFromSheet(){
+    const raw = $("ds-color") ? $("ds-color").value : "";
+    const primary = hexToRgb(raw) ? raw : (designSettings.primaryColor || "#3A2160");
+    const name = ($("ds-name") && $("ds-name").value.trim()) || designSettings.storeName || "Tindahan ni Gloria";
+    const logo = currentLogoData || null;
+    // A logo drawn on both icons makes them the same picture, and the home
+    // screen labels are truncated to about a dozen characters — so the till and
+    // the shop would become genuinely hard to tell apart. By default the logo
+    // goes on the customer-facing app, where branding is the point, and the
+    // till keeps the receipt, where finding it quickly is the point.
+    const logoOnTill = !!($("ds-logoOnTill") && $("ds-logoOnTill").checked);
+    return {
+      primary,
+      bar: mixColor(primary, "#000000", 0.28),
+      name,
+      storeLogo: logo,
+      posLogo: logoOnTill ? logo : null
+    };
+  }
+
+  async function renderIconPreview(){
+    const t = iconThemeFromSheet();
+    const [pos, store] = await Promise.all([
+      drawAppIcon(192, t.bar, t.posLogo, "receipt"),
+      drawAppIcon(192, t.bar, t.storeLogo, "bag")
+    ]);
+    const a = $("iconPreviewPos"), b = $("iconPreviewStore");
+    if(a && pos) a.src = pos;
+    if(b && store) b.src = store;
+  }
+
+  // Home-screen labels are cut off at roughly a dozen characters, so the till's
+  // short name spends its budget on "POS" — knowing which of the two apps you
+  // are opening matters more than reading the whole shop name twice.
+  function buildManifest(kind){
+    const t = iconThemeFromSheet();
+    const isPos = kind === "pos";
+    const file = isPos ? "app-icon-pos.png" : "app-icon-store.png";
+    // Home-screen labels are cut off at roughly a dozen characters. Trimming on
+    // a word boundary matters: "Tindahan ni Gloria" cut to 12 gives
+    // "Tindahan ni", which reads as an unfinished sentence, where "Tindahan"
+    // reads as a name.
+    const shorten = (str, max) => {
+      const s = String(str).trim();
+      if(s.length <= max) return s;
+      const cut = s.slice(0, max);
+      // If the character just past the cut is a space, the cut already landed
+      // on a whole word — trimming back to the previous space would throw away
+      // a word that fitted perfectly.
+      const space = cut.lastIndexOf(" ");
+      let out = (s.charAt(max) !== " " && space >= 4 ? cut.slice(0, space) : cut).trim();
+      // A trailing one-to-three letter word is almost always a particle —
+      // "ni", "ng", "sa", "de", "of", "the" — and a label ending on one reads
+      // as cut off rather than shortened. Dropped only when enough name is
+      // left standing without it.
+      const parts = out.split(" ");
+      if(parts.length > 1 && parts[parts.length - 1].length <= 3){
+        const shorter = parts.slice(0, -1).join(" ");
+        if(shorter.length >= 4) out = shorter;
+      }
+      return out;
+    };
+    return {
+      name: isPos ? t.name + " POS" : t.name,
+      short_name: isPos ? shorten(t.name, 8) + " POS" : shorten(t.name, 12),
+      description: isPos
+        ? "Point of sale, inventory, suppliers and online orders"
+        : "Order groceries for pickup or delivery",
+      start_url: "./index.html",
+      scope: "./",
+      display: "standalone",
+      orientation: "portrait",
+      background_color: "#FFFFFF",
+      theme_color: t.bar,
+      icons: [
+        { src: file, sizes: "512x512", type: "image/png", purpose: "any" },
+        { src: file, sizes: "512x512", type: "image/png", purpose: "maskable" }
+      ]
+    };
+  }
+
+  function dataUrlToBlob(dataUrl){
+    const [head, b64] = String(dataUrl).split(",");
+    const mime = (head.match(/:(.*?);/) || [])[1] || "application/octet-stream";
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for(let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  }
+
+  function saveBlob(blob, filename){
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 2000);
+  }
+
+  async function downloadAppIcon(kind){
+    try{
+      const t = iconThemeFromSheet();
+      // 512 is what the manifest declares. Android downsizes it for the home
+      // screen; shipping the small one instead would look soft on a tablet.
+      const png = await drawAppIcon(
+        512, t.bar,
+        kind === "pos" ? t.posLogo : t.storeLogo,
+        kind === "pos" ? "receipt" : "bag"
+      );
+      if(!png){ showToast("Couldn't draw the icon"); return; }
+      saveBlob(dataUrlToBlob(png), kind === "pos" ? "app-icon-pos.png" : "app-icon-store.png");
+      showToast("Saved to Downloads");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't save the icon");
+    }
+  }
+
+  function downloadManifest(kind){
+    try{
+      const json = JSON.stringify(buildManifest(kind), null, 2) + "\n";
+      saveBlob(new Blob([json], { type: "application/json" }), "manifest.json");
+      showToast("Saved to Downloads");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't save the manifest");
+    }
+  }
+
+  // ---------- Rendering: running costs and net profit ----------
+
+  function pnlMonthOptions(){
+    // Every month that has either a sale or a cost in it, newest first, so the
+    // list can't offer an empty month or hide one that has something in it.
+    const keys = new Set([thisMonthKey()]);
+    sales.forEach(s => { const k = monthKeyOf(businessDateOf(s)); if(k) keys.add(k); });
+    expenses.forEach(e => { const k = monthKeyOf(e.date); if(k) keys.add(k); });
+    return Array.from(keys).sort().reverse();
+  }
+
+  function renderPnl(){
+    const sel = $("pnlMonthSelect");
+    const sum = $("pnlSummary");
+    if(!sel || !sum) return;
+
+    const months = pnlMonthOptions();
+    if(!pnlMonth || months.indexOf(pnlMonth) === -1) pnlMonth = months[0];
+    sel.innerHTML = months.map(m =>
+      `<option value="${m}"${m === pnlMonth ? " selected" : ""}>${escapeHtml(monthLabel(m))}</option>`
+    ).join("");
+
+    const p = monthlyPnl(pnlMonth);
+
+    sum.innerHTML = `
+      <div class="report-row"><span>Sales</span><span>${peso(p.revenue)}</span></div>
+      <div class="report-row"><span>Gross profit${p.grossPct != null ? " · " + p.grossPct.toFixed(1) + "%" : ""}</span><span>${peso(p.gross)}</span></div>
+      <div class="report-row"><span>Running costs</span><span>${p.opex ? "−" + peso(p.opex) : "none recorded"}</span></div>
+      <div class="report-row total" style="${p.net < 0 ? "color:var(--danger);" : ""}">
+        <span>Net profit${p.netPct != null ? " · " + p.netPct.toFixed(1) + "%" : ""}</span>
+        <span>${peso(p.net)}</span>
+      </div>
+    `;
+
+    const notes = [];
+    if(p.opex === 0){
+      notes.push("No running costs recorded for this month yet, so net profit still equals gross profit — which is not what the shop really made. Record the rent and the electricity first; those two usually change the picture most.");
+    }
+    if(p.unmeasuredRevenue > 0){
+      notes.push(peso(p.unmeasuredRevenue) + " of sales came from products with no recorded cost, so their profit isn't counted. The real gross profit is higher than the figure above"
+        + (p.unmeasured.length ? " — starting with " + escapeHtml(p.unmeasured.slice(0,3).join(", ")) : "") + ".");
+    }
+    if(p.net < 0 && p.opex > 0){
+      notes.push("The shop spent more than the goods earned this month. That is worth looking at squarely rather than waiting for a better month.");
+    }
+    if(p.draws || p.advances){
+      const bits = [];
+      if(p.draws) bits.push(peso(p.draws) + " taken out");
+      if(p.advances) bits.push(peso(p.advances) + " put in");
+      notes.push("Owner money this month: " + bits.join(", ") + ". Deliberately kept out of the profit figures above.");
+    }
+    const be = dailyBreakEven(pnlMonth);
+    if(be) notes.push("Rent, wages and the other standing costs work out at about <b>" + peso(be) + " a day</b>. That is the gross profit a day has to clear before the shop is ahead.");
+
+    $("pnlBreakdown").innerHTML =
+      // A category whose entries all got reversed nets to zero. Listing it at
+      // ₱0.00 implies a cost that isn't there; the reversal is still visible in
+      // the entries list below, which is where it belongs.
+      (Object.keys(p.byCat).filter(c => Math.abs(p.byCat[c]) >= 0.005).length
+        ? `<div class="section-label" style="margin:4px 0 6px;">Where it went</div>` +
+          Object.keys(p.byCat)
+            .filter(c => Math.abs(p.byCat[c]) >= 0.005)
+            .sort((a,b) => p.byCat[b] - p.byCat[a])
+            .map(c => `<div class="report-row"><span>${escapeHtml(expenseCategoryLabel(c))}</span><span>${peso(p.byCat[c])}</span></div>`)
+            .join("")
+        : "") +
+      notes.map(n => `<p style="font-size:12px;color:var(--text-muted);line-height:1.6;margin:10px 0 0;">${n}</p>`).join("");
+
+    renderExpenseList(p);
+  }
+
+  function renderExpenseList(p){
+    const el = $("expenseList");
+    if(!el) return;
+    if(!p.rows.length){
+      el.innerHTML = `<p style="font-size:12px;color:var(--text-muted);margin:0;">Nothing recorded for ${escapeHtml(monthLabel(p.ym))} yet.</p>`;
+      return;
+    }
+    el.innerHTML = "";
+    // Entries are immutable, so an entry can't be stamped "reversed" after the
+    // fact. Whether it has been is answered by looking for the reversal that
+    // points at it — which is the honest direction to read it anyway.
+    const reversedIds = new Set(
+      expenses.filter(x => x.reversesId).map(x => x.reversesId)
+    );
+    p.rows.slice().sort((a,b) => String(b.date).localeCompare(String(a.date))).forEach(e => {
+      const reversed = expenseSign(e) === -1;
+      const alreadyReversed = reversedIds.has(e.id);
+      const label = isOwnerCash(e)
+        ? (e.kind === "ownerDraw" ? "Owner took out" : "Owner put in")
+        : expenseCategoryLabel(e.category);
+      const row = document.createElement("div");
+      row.className = "report-download-row";
+      row.innerHTML = `
+        <span class="name">${escapeHtml(label)} ${reversed ? "(reversal)" : ""}
+          <span style="font-weight:400;color:var(--text-muted);">${escapeHtml(e.date || "")}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
+        </span>
+        <div class="actions">
+          <b style="margin-right:8px;">${reversed ? "−" : ""}${peso(e.amount)}</b>
+          ${reversed || alreadyReversed ? "" : `<button type="button">Reverse</button>`}
+        </div>
+      `;
+      const btn = row.querySelector("button");
+      if(btn) btn.onclick = () => reverseExpense(e);
+      el.appendChild(row);
+    });
+  }
+
+  function openExpenseSheet(ownerCash){
+    $("expenseSheetTitle").textContent = ownerCash ? "Owner money" : "Record a cost";
+    $("expenseSheetIntro").textContent = ownerCash
+      ? "Money you take out of the shop or put into it. Recorded so you can see it, but kept out of the profit figures — it is not a cost of trading."
+      : "Rent, electricity, wages and anything else it costs to keep the shop open. These come off your gross profit to give the real figure.";
+    $("ownerCashKindField").style.display = ownerCash ? "" : "none";
+    $("expenseCategoryField").style.display = ownerCash ? "none" : "";
+    $("ex-category").innerHTML = EXPENSE_CATEGORIES
+      .map(c => `<option value="${c.id}">${escapeHtml(c.label)}</option>`).join("");
+    $("ex-kind").value = "ownerDraw";
+    $("ex-amount").value = "";
+    $("ex-note").value = "";
+    $("ex-date").value = todayISO();
+    $("saveExpenseBtn").dataset.ownerCash = ownerCash ? "1" : "";
+    openSheet("expenseSheet");
+  }
+
+  async function saveExpense(){
+    const ownerCash = $("saveExpenseBtn").dataset.ownerCash === "1";
+    const amount = parseFloat($("ex-amount").value);
+    const date = $("ex-date").value;
+    if(!isFinite(amount) || amount <= 0){ showToast("Enter an amount"); return; }
+    if(!date){ showToast("Pick a date"); return; }
+    $("saveExpenseBtn").disabled = true;
+    try{
+      await db.collection("expenses").add({
+        date: date,
+        kind: ownerCash ? $("ex-kind").value : "expense",
+        category: ownerCash ? "owner" : $("ex-category").value,
+        amount: Math.round(amount * 100) / 100,
+        sign: 1,
+        note: $("ex-note").value.trim() || null,
+        byUid: (auth.currentUser && auth.currentUser.uid) || null,
+        byName: currentUserName || "Owner",
+        timestamp: new Date().toISOString()
+      });
+      closeSheet("expenseSheet");
+      showToast(ownerCash ? "Owner money recorded" : "Cost recorded");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't record that");
+    }finally{
+      $("saveExpenseBtn").disabled = false;
+    }
+  }
+
+  // The correction is a new entry that cancels the old one, never an edit. Both
+  // stay on the record, which is what makes the record worth having.
+  async function reverseExpense(e){
+    if(!confirm("Cancel this entry?\n\nA reversal is recorded next to it. Both stay visible — nothing is deleted.")) return;
+    try{
+      await db.collection("expenses").add({
+        date: e.date,
+        kind: e.kind,
+        category: e.category,
+        amount: Number(e.amount) || 0,
+        sign: -1,
+        reversesId: e.id,
+        note: "Reverses: " + (e.note || expenseCategoryLabel(e.category)),
+        byUid: (auth.currentUser && auth.currentUser.uid) || null,
+        byName: currentUserName || "Owner",
+        timestamp: new Date().toISOString()
+      });
+      showToast("Reversed");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't reverse that");
+    }
+  }
+
   function renderDesignSummary(){
     const el = $("designSummary");
     if(!el) return;
@@ -2559,6 +3014,8 @@
       img.style.display = "none"; img.src = "";
       ph.style.display = "block"; removeBtn.style.display = "none";
     }
+    // The logo is drawn into the icon, so changing it changes the icon.
+    renderIconPreview();
   }
 
   // ---------- Bringing a catalogue in from somewhere else ----------
@@ -2861,6 +3318,25 @@
       const el = $(id);
       if(el) el.style.display = featureOn(key) ? "" : "none";
     });
+
+    // Cost, margin and account management are owner-only. Firestore refuses a
+    // manager the underlying data anyway — productCosts, suppliers, purchases
+    // and payables are unreadable to them — so these blocks would render blank
+    // and puzzling rather than leak anything. Hiding them is about not asking
+    // someone to stare at empty boxes; the security is in the rules.
+    //
+    // This runs last on purpose: it must win over the feature toggles above.
+    if(currentUserRole !== "owner"){
+      ["pricingHelperBlock","competitorDisclaimer","marginBlock",
+       "pricingHelperSection","staffBlock","birBlock","pnlBlock",
+       // "Edit full details" opens the product form, where price and name
+       // live. Firestore refuses a manager that write, so the button would
+       // only ever produce an error — better it isn't there.
+       "editFullProductBtn"].forEach(id => {
+        const el = $(id);
+        if(el) el.style.display = "none";
+      });
+    }
   }
 
   // ---------- Delivery areas ----------
@@ -3303,6 +3779,7 @@
         $("ds-font").value = base.font;
         $("ds-corners").value = base.corners;
         $("ds-density").value = density;
+        renderIconPreview();
         showToast("Applied — press Save to keep it");
       };
     }catch(err){
@@ -3335,10 +3812,12 @@
     $("ds-density").value = designSettings.density || "auto";
     $("ds-photoFit").value = designSettings.photoFit || "fill";
     $("ds-watermark").checked = designSettings.watermark !== false;
+    $("ds-logoOnTill").checked = designSettings.logoOnTill === true;
     $("ds-minDelivery").value = designSettings.minOrderDelivery != null ? designSettings.minOrderDelivery : "";
     $("ds-minPickup").value = designSettings.minOrderPickup != null ? designSettings.minOrderPickup : "";
     currentLogoData = designSettings.logo || null;
     updateLogoPreview();
+    renderIconPreview();
     openSheet("storeDesignSheet");
   }
 
@@ -3355,6 +3834,7 @@
       density: $("ds-density").value,
       photoFit: $("ds-photoFit").value,
       watermark: $("ds-watermark").checked,
+      logoOnTill: $("ds-logoOnTill").checked,
       logo: currentLogoData || null,
       // Read by the public storefront to block checkouts that are too small to
       // be worth fulfilling — per-piece ordering makes tiny baskets easy.
@@ -3689,7 +4169,11 @@
     if(code === "auth/user-not-found" || code === "auth/wrong-password" || code === "auth/invalid-credential") return "Incorrect email or password.";
     if(code === "auth/too-many-requests") return "Too many attempts — please wait a bit and try again.";
     if(code === "auth/network-request-failed") return "No internet connection — check your connection and try again.";
-    if(code === "auth/email-already-in-use") return "That email is already used by another account.";
+    // Removing an account frees its seat and stops that person signing in, but
+    // the sign-in itself lives in Firebase Authentication, which only a server
+    // can delete from — not a phone. So a removed person's email stays taken.
+    // Saying so is better than a bare "already in use" that looks like a bug.
+    if(code === "auth/email-already-in-use") return "That email already has a sign-in — if this person was removed before, use a different email address.";
     if(code === "auth/weak-password") return "Password must be at least 6 characters.";
     return (err && err.message) || "Sign in failed.";
   }
@@ -3753,6 +4237,7 @@
       renderDayCard();
       renderDashboard();
       renderMarginReport();
+      renderPnl();
       renderZoneEconomics();
       renderBuyingView();
     }, (err) => { console.error(err); showToast("Couldn't load sales"); }));
@@ -3761,6 +4246,35 @@
       settings = doc.exists ? doc.data() : { low: null, high: null };
       renderDashboard();
     }, (err) => { console.error(err); }));
+
+    // The business day. A manager opens the float in the morning and runs the
+    // Z-reading at close, so these have to load for them — previously they
+    // were attached only on the owner's path, which left a manager staring at
+    // a blank day card and unable to close up.
+    managerListenerUnsubs.push(db.collection("dayOpenings").orderBy("date", "desc").limit(120).onSnapshot((snap) => {
+      dayOpenings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderDayCard();
+    }, (err) => { console.error(err); }));
+
+    managerListenerUnsubs.push(db.collection("dayClosings").orderBy("date", "desc").limit(120).onSnapshot((snap) => {
+      dayClosings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderDayCard();
+      renderZHistory();
+    }, (err) => { console.error(err); }));
+
+    // The stock audit trail — a manager books in deliveries and runs counts,
+    // so they need to see the corrections that have already been made.
+    managerListenerUnsubs.push(db.collection("stockLogs").orderBy("timestamp", "desc").limit(100).onSnapshot((snap) => {
+      stockLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderStockLog();
+    }, (err) => { console.error(err); }));
+
+    // The online order queue.
+    managerListenerUnsubs.push(db.collection("orders").orderBy("createdAt", "desc").onSnapshot((snap) => {
+      orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderOrders();
+      renderZoneEconomics();
+    }, (err) => { console.error(err); showToast("Couldn't load orders"); }));
   }
 
   function detachManagerListeners(){
@@ -3779,12 +4293,6 @@
     ownerListenersAttached = true;
     attachManagerListeners(); // the owner also needs everything managers get
 
-    ownerListenerUnsubs.push(db.collection("orders").orderBy("createdAt", "desc").onSnapshot((snap) => {
-      orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderOrders();
-      renderZoneEconomics();
-    }, (err) => { console.error(err); showToast("Couldn't load orders"); }));
-
     ownerListenerUnsubs.push(db.collection("settings").doc("pairings").onSnapshot((doc) => {
       pairingRules = doc.exists ? (doc.data().rules || []) : [];
       renderPairingRulesUI();
@@ -3793,22 +4301,6 @@
     ownerListenerUnsubs.push(db.collection("staff").onSnapshot((snap) => {
       staffList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderStaffList();
-    }, (err) => { console.error(err); }));
-
-    managerListenerUnsubs.push(db.collection("dayOpenings").orderBy("date", "desc").limit(120).onSnapshot((snap) => {
-      dayOpenings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderDayCard();
-    }, (err) => { console.error(err); }));
-
-    managerListenerUnsubs.push(db.collection("dayClosings").orderBy("date", "desc").limit(120).onSnapshot((snap) => {
-      dayClosings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderDayCard();
-      renderZHistory();
-    }, (err) => { console.error(err); }));
-
-    ownerListenerUnsubs.push(db.collection("stockLogs").orderBy("timestamp", "desc").limit(100).onSnapshot((snap) => {
-      stockLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderStockLog();
     }, (err) => { console.error(err); }));
 
     // Cost figures live apart from the public product list, so margins are
@@ -3828,10 +4320,19 @@
       renderBuyingView();
     }, (err) => { console.error(err); }));
 
+    // Running costs are owner-only for the same reason margins are: what the
+    // shop pays in rent and wages is nobody else's business.
+    ownerListenerUnsubs.push(db.collection("expenses").orderBy("date", "desc").limit(600).onSnapshot((snap) => {
+      expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderPnl();
+      renderDayCard();
+    }, (err) => { console.error(err); }));
+
     ownerListenerUnsubs.push(db.collection("productCosts").onSnapshot((snap) => {
       productCosts = {};
       snap.docs.forEach(d => { productCosts[d.id] = d.data(); });
       renderMarginReport();
+      renderPnl();
       renderInventory();
       renderBuyingView();
     }, (err) => { console.error(err); }));
@@ -3844,9 +4345,15 @@
   }
 
   // ---------- Staff & manager accounts (roles + per-cashier accountability) ----------
+  // A manager runs the shop floor: sells, books in stock, works the online
+  // order queue, opens and closes the day, and watches the Sales dashboard.
+  // What they never get is Buying — suppliers, delivery costs, what you owe —
+  // and Reports, where the margin and cost screens live. That separation is
+  // enforced in firestore.rules too, so hiding the tab is the polite half of
+  // it and the database is the real half.
   const ROLE_TABS = {
     owner: ["sell","inventory","buying","orders","sales","reports"],
-    manager: ["sell","sales"],
+    manager: ["sell","inventory","orders","sales"],
     staff: ["sell"]
   };
 
@@ -3854,22 +4361,28 @@
   function attachRoleListener(uid){
     detachRoleListener();
     roleUnsub = db.collection("staff").doc(uid).onSnapshot((doc) => {
-      if(doc.exists){
+      // Ownership is decided by the email list and nothing else. Checking it
+      // FIRST matters: it means a staff record can never demote an owner, and
+      // — more to the point — a staff record claiming role:"owner" can never
+      // promote anyone. There is no path from a document to full control.
+      if(isOwnerAccount()){
+        currentUserRole = "owner";
+        currentUserName = (doc.exists && doc.data().name) || "Owner";
+        currentUserActive = true;
+      } else if(doc.exists){
         const data = doc.data();
-        currentUserRole = data.role === "manager" ? "manager" : data.role === "staff" ? "staff" : "owner";
+        // Only two roles can come from a document. Anything else is treated as
+        // the least privileged one rather than the most.
+        currentUserRole = data.role === "manager" ? "manager" : "staff";
         currentUserName = data.name || (currentUserRole === "manager" ? "Manager" : "Staff");
         currentUserActive = data.active !== false;
-        if(currentUserRole !== "owner" && !currentUserActive){
+        if(!currentUserActive){
           showToast("Your access has been disabled — contact the store owner.");
           detachOwnerListeners();
           detachManagerListeners();
           auth.signOut();
           return;
         }
-      } else if(isOwnerAccount()){
-        currentUserRole = "owner";
-        currentUserName = "Owner";
-        currentUserActive = true;
       } else {
         // Signed in, but neither the owner account nor a staff/manager account
         // created by the owner. Previously this fell through to "owner" — so
@@ -3906,7 +4419,15 @@
     applyFeatureUI();
   }
 
+  function renderSeatCounts(){
+    const el = $("seatCounts");
+    if(!el) return;
+    const m = seatsUsed("manager"), st = seatsUsed("staff");
+    el.innerHTML = `Owners <b>2</b> · Managers <b>${m} of ${MANAGER_SEATS.length}</b> · Staff <b>${st} of ${STAFF_SEATS.length}</b>`;
+  }
+
   function renderStaffList(){
+    renderSeatCounts();
     const el = $("staffList");
     if(!el) return;
     if(staffList.length === 0){
@@ -3914,18 +4435,60 @@
       return;
     }
     el.innerHTML = "";
-    staffList.forEach(s => {
+    // Managers first, then staff, each in seat order — so the list reads the
+    // same way every time and it's obvious which seats are filled.
+    const ordered = staffList.slice().sort((a, b) => {
+      if(a.role !== b.role) return a.role === "manager" ? -1 : 1;
+      return String(a.seat || "").localeCompare(String(b.seat || ""));
+    });
+    ordered.forEach(s => {
       const active = s.active !== false;
       const roleLabel = s.role === "manager" ? "manager" : "staff";
       const row = document.createElement("div");
       row.className = "report-download-row";
       row.innerHTML = `
         <span class="name">${escapeHtml(s.name || s.email)} <span style="font-weight:400;color:var(--text-muted);">(${roleLabel}${active ? "" : ", disabled"})</span></span>
-        <div class="actions"><button type="button">${active ? "Disable" : "Enable"}</button></div>
+        <div class="actions">
+          <button type="button" data-act="toggle">${active ? "Disable" : "Enable"}</button>
+          <button type="button" data-act="remove">Remove</button>
+        </div>
       `;
-      row.querySelector("button").onclick = () => toggleStaffActive(s.id, !active);
+      row.querySelector('[data-act="toggle"]').onclick = () => toggleStaffActive(s.id, !active);
+      row.querySelector('[data-act="remove"]').onclick = () => removeStaffAccount(s);
       el.appendChild(row);
     });
+  }
+
+  // Removing an account frees its seat for the next person. It does NOT erase
+  // anything they did: their sales, stock corrections and Z-readings stay
+  // exactly where they are, under their name, permanently. That is the point
+  // of an attributable record — it has to outlast the person's employment.
+  async function removeStaffAccount(s){
+    const label = s.name || s.email || "this account";
+    if(!confirm(
+      "Remove " + label + "?\n\n" +
+      "Their seat is freed for someone else and they can no longer sign in.\n\n" +
+      "Everything they already did — sales, invoices, stock corrections, day closings — stays on the record under their name. Nothing is erased."
+    )) return;
+    try{
+      await db.collection("staff").doc(s.id).delete();
+      showToast("Account removed — seat freed");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't remove that account");
+    }
+  }
+
+  // The sheet's seat hint, refreshed whenever the role dropdown changes.
+  function updateSeatHint(){
+    const el = $("sf-seatHint");
+    if(!el) return;
+    const role = ($("sf-role") && $("sf-role").value === "manager") ? "manager" : "staff";
+    const used = seatsUsed(role), total = seatPool(role).length;
+    const left = total - used;
+    el.textContent = left > 0
+      ? left + " of " + total + " " + role + " seat" + (total === 1 ? "" : "s") + " still free."
+      : "All " + total + " " + role + " seats are in use — remove one before adding another.";
   }
 
   async function toggleStaffActive(uid, makeActive){
@@ -3947,6 +4510,16 @@
     if(!email){ showToast("Enter an email"); return; }
     if(!password || password.length < 6){ showToast("Password must be at least 6 characters"); return; }
 
+    // Claim a seat before touching Firebase Auth. If every seat of this role is
+    // taken we stop here — creating the sign-in first and failing afterwards
+    // would leave an orphaned account that can never be used but blocks its
+    // email address from being reused.
+    const seat = freeSeat(role);
+    if(!seat){
+      showToast("All " + seatPool(role).length + " " + role + " seats are in use — remove one first");
+      return;
+    }
+
     $("createStaffBtn").disabled = true;
     // A secondary, throwaway Firebase app instance is used so that creating the
     // new sign-in doesn't hijack the owner's own signed-in session (the default
@@ -3954,10 +4527,18 @@
     const secondary = firebase.initializeApp(window.FIREBASE_CONFIG, "staffCreate" + Date.now());
     try{
       const cred = await secondary.auth().createUserWithEmailAndPassword(email, password);
-      const uid = cred.user.uid;
+      const newUid = cred.user.uid;
       await secondary.auth().signOut();
-      await db.collection("staff").doc(uid).set({
-        name, email, role, active: true, createdAt: new Date().toISOString()
+
+      // Order matters. The seat must be assigned to this uid BEFORE the staff
+      // record is written, because firestore.rules checks the seat registry
+      // when it accepts the staff document — that check is what makes the
+      // 2-and-5 limit a property of the database rather than of this screen.
+      await db.collection("staffSeats").doc(seat).set({
+        uid: newUid, email, name, role, assignedAt: new Date().toISOString()
+      });
+      await db.collection("staff").doc(newUid).set({
+        name, email, role, seat, active: true, createdAt: new Date().toISOString()
       });
       closeSheet("staffSheet");
       showToast((role === "manager" ? "Manager" : "Staff") + " account created");
@@ -4497,6 +5078,13 @@
     $("loadingInv").style.display = "none";
     if(products.length === 0){
       wrap.style.display = "none";
+      // A manager has no "+" button, so don't tell them to tap one.
+      const msg = $("emptyInv").querySelector(".msg");
+      if(msg){
+        msg.innerHTML = currentUserRole === "owner"
+          ? "No products in stock yet.<br>Tap + to add your first product."
+          : "No products in stock yet.<br>The owner adds products.";
+      }
       $("emptyInv").style.display = "block";
       return;
     }
@@ -4706,6 +5294,145 @@
       });
     });
     return stats;
+  }
+
+  // =====================================================================
+  // RUNNING COSTS, OWNER CASH, AND WHAT THE SHOP ACTUALLY MADE
+  // =====================================================================
+  //
+  // Up to here the POS could only ever answer "what did the goods earn" —
+  // gross profit. Rent, electricity and wages were invisible to it, so the
+  // most encouraging number on the screen was also the least truthful one.
+  //
+  // Two rules hold this together:
+  //
+  //  1. Money YOU take out or put in is not a business expense. An owner's
+  //     draw is the business paying its owner, not a cost of trading; if it
+  //     were subtracted from profit, taking money out would look like the
+  //     shop earning less, and putting money in would look like it earning
+  //     more. Both are recorded, neither touches net profit.
+  //
+  //  2. Nothing here is editable. A mistyped bill is corrected by a reversal
+  //     that cancels it, leaving both entries visible — the same rule the
+  //     sales record and the stock log follow. "Reverse" writes that entry
+  //     for you, so being honest costs one tap rather than an argument.
+
+  const EXPENSE_CATEGORIES = [
+    { id: "rent",        label: "Rent",                    recurring: true  },
+    { id: "electricity", label: "Electricity",             recurring: true  },
+    { id: "water",       label: "Water",                   recurring: true  },
+    { id: "salaries",    label: "Salaries & wages",        recurring: true  },
+    { id: "delivery",    label: "Delivery & fuel",         recurring: false },
+    { id: "repairs",     label: "Repairs & maintenance",   recurring: false },
+    { id: "permits",     label: "Permits & licenses",      recurring: false },
+    { id: "software",    label: "POS, load & internet",    recurring: true  },
+    { id: "bank",        label: "Bank & GCash charges",    recurring: false },
+    { id: "supplies",    label: "Store supplies",          recurring: false },
+    { id: "other",       label: "Other",                   recurring: false }
+  ];
+  function expenseCategoryLabel(id){
+    const c = EXPENSE_CATEGORIES.find(x => x.id === id);
+    return c ? c.label : "Other";
+  }
+
+  // Positive amount plus a sign, rather than negative amounts — the rules
+  // refuse a negative total, and it keeps a reversal visibly a reversal
+  // instead of an entry that merely looks odd.
+  function expenseSign(e){ return Number(e && e.sign) === -1 ? -1 : 1; }
+  function expenseValue(e){ return expenseSign(e) * (Number(e && e.amount) || 0); }
+  function isOwnerCash(e){ return e && (e.kind === "ownerDraw" || e.kind === "ownerAdvance"); }
+
+  function monthKeyOf(dateStr){ return String(dateStr || "").slice(0, 7); }
+  function thisMonthKey(){ return todayISO().slice(0, 7); }
+  function monthLabel(ym){
+    const [y, m] = String(ym).split("-").map(Number);
+    if(!y || !m) return ym;
+    return ["January","February","March","April","May","June","July",
+            "August","September","October","November","December"][m-1] + " " + y;
+  }
+  function daysInMonth(ym){
+    const [y, m] = String(ym).split("-").map(Number);
+    if(!y || !m) return 30;
+    return new Date(y, m, 0).getDate();
+  }
+
+  // Gross profit for one calendar month. Deliberately a separate function from
+  // recentProductStats() rather than a parameter on it: that one answers "how
+  // is this product doing lately" on a rolling 30 days, which is the right
+  // window for ordering decisions and the wrong one for a month's accounts.
+  //
+  // `measurable` matters. A sale of something with no recorded cost can be
+  // counted as revenue but not as profit, so the shop's real gross profit is
+  // at least what we show and probably more. Reporting it as if it were
+  // complete would quietly overstate the loss.
+  function grossProfitForMonth(ym){
+    let revenue = 0, profit = 0, unmeasuredRevenue = 0;
+    const unmeasured = new Set();
+    sales.forEach(s => {
+      if(monthKeyOf(businessDateOf(s)) !== ym) return;
+      const sign = saleSign(s);
+      (s.items || []).forEach(it => {
+        const qty = sign * (Number(it.qty) || 0);
+        const net = netOfTax(it.price) * qty;
+        revenue += net;
+        const packCost = it.productId ? costAtDate(it.productId, s.timestamp) : null;
+        if(packCost == null || !isFinite(packCost) || packCost <= 0){
+          unmeasuredRevenue += net;
+          if(it.name) unmeasured.add(it.name);
+          return;
+        }
+        const perPack = (it.unit === "sub" && Number(it.perPack)) ? Number(it.perPack) : 1;
+        profit += net - (packCost / perPack) * qty;
+      });
+    });
+    return { revenue, profit, unmeasuredRevenue, unmeasured: Array.from(unmeasured) };
+  }
+
+  function monthlyPnl(ym){
+    const g = grossProfitForMonth(ym);
+    const rows = expenses.filter(e => monthKeyOf(e.date) === ym);
+
+    const byCat = {};
+    let opex = 0, draws = 0, advances = 0;
+    rows.forEach(e => {
+      const v = expenseValue(e);
+      if(e.kind === "ownerDraw"){ draws += v; return; }
+      if(e.kind === "ownerAdvance"){ advances += v; return; }
+      byCat[e.category || "other"] = (byCat[e.category || "other"] || 0) + v;
+      opex += v;
+    });
+
+    const net = g.profit - opex;
+    return {
+      ym,
+      revenue: g.revenue,
+      gross: g.profit,
+      unmeasuredRevenue: g.unmeasuredRevenue,
+      unmeasured: g.unmeasured,
+      byCat, opex, net,
+      grossPct: g.revenue > 0 ? (g.profit / g.revenue) * 100 : null,
+      netPct: g.revenue > 0 ? (net / g.revenue) * 100 : null,
+      draws, advances,
+      rows
+    };
+  }
+
+  // What it costs to open the doors for a day, from the recurring categories
+  // only — rent and wages are owed whether or not anyone walks in, while a
+  // one-off repair is not a daily burden. This is the number that turns
+  // "we sold a lot today" into "we actually got ahead today".
+  function dailyBreakEven(ym){
+    ym = ym || thisMonthKey();
+    const recurringIds = EXPENSE_CATEGORIES.filter(c => c.recurring).map(c => c.id);
+    let monthly = 0;
+    expenses.forEach(e => {
+      if(isOwnerCash(e)) return;
+      if(monthKeyOf(e.date) !== ym) return;
+      if(recurringIds.indexOf(e.category) === -1) return;
+      monthly += expenseValue(e);
+    });
+    if(monthly <= 0) return null;
+    return monthly / daysInMonth(ym);
   }
 
   // Store-wide gross margin over the last 30 days, weighted by what actually
@@ -5700,10 +6427,12 @@
   let returnQty = {};   // line index -> qty being returned
 
   // Returns are a control, so who may record one is a setting, not a guess.
-  // Left on for the owner always; staff only when the owner allows it.
+  // A return hands money back across the counter with no customer to complain
+  // if it never happened, which makes it the single easiest way to walk cash
+  // out of a shop. Owners and managers always may; staff only when the owner
+  // has deliberately switched it on for them.
   function canRecordReturns(){
-    if(isOwnerAccount()) return true;
-    if(currentUserRole === "manager") return designSettings.returnsByStaff !== false;
+    if(isOwnerAccount() || currentUserRole === "manager") return true;
     return designSettings.returnsByStaff === true;
   }
 
@@ -6036,6 +6765,17 @@
     if(t.gcash > 0) html += `<div class="report-row"><span>of which GCash</span><span>${peso(t.gcash)}</span></div>`;
     if(t.online > 0) html += `<div class="report-row"><span>of which online orders</span><span>${peso(t.online)}</span></div>`;
     html += `<div class="report-row total"><span>Drawer should hold</span><span>${peso(t.expectedCash)}</span></div>`;
+
+    // What today has to clear before the shop is actually ahead. Takings alone
+    // never answer that — a good sales day with the rent unpaid is still a day
+    // the shop went backwards. Owner-only, since it is built from costs staff
+    // and managers cannot see.
+    if(currentUserRole === "owner"){
+      const be = dailyBreakEven(monthKeyOf(date));
+      if(be){
+        html += `<div class="report-row" style="color:var(--text-muted);font-size:12px;"><span>Standing costs, per day</span><span>${peso(be)}</span></div>`;
+      }
+    }
     el.innerHTML = html;
 
     if(btn){
@@ -7643,7 +8383,11 @@
     document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
     $("view-" + view).classList.add("active");
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.view === view));
-    $("addProductFab").style.display = view === "inventory" ? "flex" : "none";
+    // Only an owner may create a product, so a manager on the Inventory tab
+    // gets no "+" button. They reach the same rows to count and correct stock;
+    // what they can't do is invent an item or change its price.
+    $("addProductFab").style.display =
+      (view === "inventory" && currentUserRole === "owner") ? "flex" : "none";
     if(view === "sell") renderCartBar();
     if(view === "reports") renderReportsView();
     if(view === "buying") renderBuyingView();
@@ -8976,11 +9720,29 @@
 
     $("addStaffBtn").onclick = () => {
       $("sf-name").value = ""; $("sf-email").value = ""; $("sf-password").value = ""; $("sf-role").value = "staff";
+      updateSeatHint();
       openSheet("staffSheet");
     };
+    $("sf-role").onchange = updateSeatHint;
     $("createStaffBtn").onclick = createStaffAccount;
+    $("addExpenseBtn").onclick = () => openExpenseSheet(false);
+    $("addOwnerCashBtn").onclick = () => openExpenseSheet(true);
+    $("saveExpenseBtn").onclick = saveExpense;
+    $("pnlMonthSelect").onchange = (e) => { pnlMonth = e.target.value; renderPnl(); };
     $("addPairingRuleBtn").onclick = addPairingRule;
     $("editDesignBtn").onclick = openStoreDesignSheet;
+    // The preview follows the colour, the name and the logo as they change, so
+    // the icon is something you choose rather than something you find out about
+    // after uploading it.
+    ["ds-color", "ds-name"].forEach(id => {
+      const el = $(id);
+      if(el) el.addEventListener("input", renderIconPreview);
+    });
+    $("ds-logoOnTill").onchange = renderIconPreview;
+    $("dlIconPos").onclick = () => downloadAppIcon("pos");
+    $("dlIconStore").onclick = () => downloadAppIcon("store");
+    $("dlManifestPos").onclick = () => downloadManifest("pos");
+    $("dlManifestStore").onclick = () => downloadManifest("store");
     $("importPreviewBtn").onclick = previewImport;
     $("importFileBtn").onclick = () => $("importFile").click();
     $("importFile").onchange = (e) => {
@@ -9008,6 +9770,9 @@
     $("ds-theme").onchange = (e) => {
       const hex = THEME_PRESETS[e.target.value];
       if(hex) $("ds-color").value = hex;
+      // Setting .value in code fires no input event, so the preview is asked
+      // to redraw by hand here and everywhere else that moves the colour.
+      renderIconPreview();
     };
     $("chooseLogoBtn").onclick = () => $("ds-logo-input").click();
     const handleLogoPhoto = async (e) => {
@@ -9095,10 +9860,36 @@
       });
     };
     $("authPassword").addEventListener("keydown", (e) => { if(e.key === "Enter") $("signInBtn").click(); });
+
+    // With two owners, two managers and five staff, someone will eventually
+    // forget a password — and every one of them would otherwise have to come
+    // through the Firebase console, which only the owners can reach.
+    //
+    // The message is deliberately the same whether or not the address has an
+    // account. Saying "no account for that email" would let anyone stand at the
+    // sign-in screen and discover which addresses can open the till.
+    $("forgotBtn").onclick = () => {
+      const email = $("authEmail").value.trim();
+      const err = $("authError");
+      if(!email){
+        err.textContent = "Type your email above first, then tap this.";
+        err.style.display = "block";
+        return;
+      }
+      $("forgotBtn").disabled = true;
+      auth.sendPasswordResetEmail(email)
+        .catch((e) => { console.error(e); })
+        .then(() => {
+          err.textContent = "If " + email + " has an account, a reset link is on its way. Check spam too.";
+          err.style.display = "block";
+          $("forgotBtn").disabled = false;
+        });
+    };
+
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v51";
+  const APP_VERSION = "v55";
 
   function init(){
     applyRememberedDesign();
