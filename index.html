@@ -182,6 +182,14 @@
     position:absolute;inset:0;
     width:100%;height:100%;object-fit:cover;display:block;
   }
+  /* The category tile that stands in for a missing photo. It takes the shop's
+     own colour, so changing the theme restyles every one of them at once. */
+  .cat-tile{
+    display:flex;align-items:center;justify-content:center;
+    width:100%;height:100%;background:var(--primary-tint);color:var(--primary);
+  }
+  .cat-tile svg{width:54%;height:54%;display:block}
+  .inv-thumb .cat-tile svg{width:60%;height:60%}
   .thumb .placeholder{font-size:26px;opacity:.32;}
   .inv-thumb{
     width:46px;height:46px;border-radius:10px;overflow:hidden;flex:none;
@@ -694,7 +702,12 @@
     <div id="loadingSales" class="loading-wrap">Loading sales…</div>
     <div id="salesContent" style="display:none;">
 
-      <div class="section-label" style="margin-top:0;" id="dayCardLabel">The business day</div>
+      <div class="section-label" style="margin-top:0;" id="receivablesLabel">On the book</div>
+      <div class="report-card" id="receivablesCard" style="margin-bottom:14px;">
+        <div id="receivablesSummary"></div>
+      </div>
+
+      <div class="section-label" id="dayCardLabel">The business day</div>
       <div class="report-card" id="dayCard" style="margin-bottom:14px;">
         <div id="daySummary"></div>
         <div class="btn-row" style="margin-top:12px;">
@@ -978,6 +991,50 @@
       <div id="importPreview" style="display:none;"></div>
     </div>
 
+    <div class="section-label">Product photos</div>
+    <div class="report-card">
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 10px;">Pick all the photos at once. Each file is matched to a product by the code or the name in its filename &mdash; <b>BAT-0042.webp</b>, or <b>004_Selecta_Magnum.webp</b>. Anything it can&rsquo;t place, you point at the right product here. <b>No renaming needed.</b></p>
+      <div class="field">
+        <label>Where did these come from</label>
+        <select id="photoSource">
+          <option value="own">My own photos</option>
+          <option value="supplier">Supplier or distributor pack</option>
+          <option value="brand">Official brand asset</option>
+          <option value="other">Somewhere else</option>
+        </select>
+        <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Recorded against each product. If a brand ever asks where an image came from, the answer is on the record rather than in someone's memory.</p>
+      </div>
+      <div class="field">
+        <label>Who gave permission (optional)</label>
+        <input type="text" id="photoPermission" placeholder="e.g. Nestlé PH rep, email 12 Sep" autocomplete="off">
+        <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Only for photos you didn&rsquo;t take. Name the person and when they sent them. A photo from a brand with no-one&rsquo;s name against it is a photo you can&rsquo;t defend &mdash; the count below shows how many are in that state.</p>
+      </div>
+      <div id="photoUnverified" style="display:none;"></div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:9px;cursor:pointer;">
+          <input type="checkbox" id="photoTidy" checked style="width:auto;margin:0;">
+          <span>Tidy up the photos automatically</span>
+        </label>
+        <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Takes out the colour cast from the light, brightens what the camera left dark, crops to the product and squares it off. You&rsquo;ll see the first two before and after, so you can judge it before anything is saved. It can&rsquo;t fix a blurred photo &mdash; steady the phone and tap the product to focus.</p>
+      </div>
+      <input type="file" accept="image/*" multiple id="photoFiles" style="display:none;">
+      <button type="button" class="btn btn-secondary" id="pickPhotosBtn">Choose photos</button>
+      <div id="photoSamples" style="display:none;margin-top:12px;"></div>
+
+      <!-- The assignment panel. One file at a time, with a type-to-filter list
+           rather than a 216-option dropdown: a select that long is unusable on
+           a phone, and 176 of them would be several thousand DOM nodes. -->
+      <div id="photoAssignPanel" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-sunk);">
+        <div style="font-size:12px;color:var(--text-muted);" id="photoAssignCount"></div>
+        <div style="font-size:14px;font-weight:700;margin:4px 0 10px;overflow-wrap:anywhere;" id="photoAssignFile"></div>
+        <input type="text" id="photoAssignSearch" placeholder="Type part of the product name" autocomplete="off" style="width:100%;">
+        <div id="photoAssignHits" style="margin-top:8px;"></div>
+        <button type="button" class="btn btn-secondary" id="photoAssignSkip" style="margin-top:10px;width:100%;">Leave this one out</button>
+      </div>
+
+      <div id="photoImportPreview" style="display:none;margin-top:12px;"></div>
+    </div>
+
     <div class="section-label">Store setup</div>
     <div class="report-card">
       <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 10px;">Pick the kind of business this is, then switch off anything it doesn't use. Hidden parts stay out of the way for you and your staff — nothing is deleted, so turning one back on brings your data with it.</p>
@@ -1193,6 +1250,7 @@
 
 <!-- FAB for inventory add -->
 <button class="fab" id="addProductFab" style="display:none;">+</button>
+<button class="fab" id="utangFab" style="display:none;right:80px;font-size:22px;" title="Utang book">📒</button>
 
 <!-- Bottom nav -->
 <nav class="tabbar">
@@ -1230,7 +1288,12 @@
       <select id="cartPayment">
         <option value="cash">Cash</option>
         <option value="gcash">GCash</option>
+        <option value="utang" id="payUtangOption">Utang — charge to an account</option>
       </select>
+      <div id="cartCustomerRow" style="display:none;margin-top:8px;">
+        <select id="cartCustomer"></select>
+        <p id="cartCustomerNote" style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;"></p>
+      </div>
     </div>
     <button class="btn btn-secondary" id="scpwdBtn" style="margin:0 0 4px;">🪪 Senior / PWD discount</button>
     <div class="summary-row" id="cartSubtotalRow" style="display:none;"><span>Subtotal</span><span id="cartSubtotal">₱0.00</span></div>
@@ -1316,8 +1379,17 @@
             <button type="button" class="btn btn-secondary" id="takePhotoBtn" style="flex:1;">📷 Take photo</button>
             <button type="button" class="btn btn-secondary" id="choosePhotoBtn" style="flex:1;">🖼️ Gallery</button>
           </div>
+          <button type="button" class="btn btn-secondary" id="findFreePhotoBtn">🔎 Find a free-to-use photo</button>
           <button type="button" class="btn btn-danger" id="removePhotoBtn" style="display:none;">Remove photo</button>
         </div>
+      </div>
+      <div id="freePhotoPanel" style="display:none;margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-sunk);">
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="freePhotoQuery" placeholder="What is it? e.g. toothbrush" autocomplete="off" style="flex:1;">
+          <button type="button" class="btn btn-secondary" id="freePhotoSearchBtn" style="flex:none;">Search</button>
+        </div>
+        <div id="freePhotoNote" style="font-size:11px;color:var(--text-muted);line-height:1.5;margin-top:7px;"></div>
+        <div id="freePhotoResults" style="margin-top:10px;"></div>
       </div>
     </div>
     <div class="field-row">
@@ -1328,6 +1400,26 @@
       <div class="field">
         <label>Stock qty</label>
         <input type="number" id="pf-stock" inputmode="numeric" placeholder="0">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Code / SKU</label>
+        <input type="text" id="pf-sku" placeholder="e.g. BAT-0042">
+      </div>
+      <div class="field">
+        <label>Sold as</label>
+        <input type="text" id="pf-unit" placeholder="pack, can, bottle…">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Brand</label>
+        <input type="text" id="pf-brand" placeholder="e.g. Selecta">
+      </div>
+      <div class="field">
+        <label>Size</label>
+        <input type="text" id="pf-size" placeholder="e.g. 1.25L">
       </div>
     </div>
     <p class="price-warning" id="priceCostWarning" style="display:none;"></p>
@@ -1520,6 +1612,7 @@
       <select id="rt-method">
         <option value="cash">Cash from the drawer</option>
         <option value="gcash">GCash</option>
+        <option value="utang" id="refundUtangOption">Take it off their account</option>
         <option value="none">Nothing — no money changed hands</option>
       </select>
     </div>
@@ -1713,6 +1806,79 @@
   </div>
 </div>
 
+<div class="sheet" id="utangSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2>Utang book</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <div id="utangSummary" style="margin-bottom:12px;"></div>
+    <div class="field">
+      <input type="text" id="utangSearch" placeholder="Search a name…">
+    </div>
+    <div id="utangList" style="margin-bottom:12px;"></div>
+    <button class="btn btn-secondary" id="addCustomerBtn">Add someone to the book</button>
+  </div>
+</div>
+
+<div class="sheet" id="customerSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2 id="customerSheetTitle">Add to the book</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="cu-name" placeholder="e.g. Nanay Linda">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Phone (optional)</label>
+        <input type="tel" id="cu-phone" inputmode="tel" placeholder="09…">
+      </div>
+      <div class="field">
+        <label>Where (optional)</label>
+        <input type="text" id="cu-place" placeholder="Barangay or town">
+      </div>
+    </div>
+    <div class="field">
+      <label>Credit limit (₱, optional)</label>
+      <input type="number" id="cu-limit" inputmode="decimal" placeholder="0 = no limit">
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">A limit warns loudly when it's passed but never blocks a sale. Refusing someone at the counter in front of neighbours costs more than the goods.</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveCustomerBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="collectSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2 id="collectTitle">Record a payment</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <div id="collectBalance" class="margin-readout" style="display:block;"></div>
+    <div class="field-row">
+      <div class="field">
+        <label>Amount (₱)</label>
+        <input type="number" id="co-amount" inputmode="decimal" placeholder="0.00">
+      </div>
+      <div class="field">
+        <label>How</label>
+        <select id="co-method">
+          <option value="cash">Cash</option>
+          <option value="gcash">GCash</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Note (optional)</label>
+      <input type="text" id="co-note" placeholder="e.g. part payment">
+    </div>
+    <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:0 0 10px;">Cash payments go into today's drawer count. Once recorded, a payment can't be edited — a mistake is cancelled with a reversal.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveCollectBtn">Record it</button>
+    </div>
+    <div class="section-label" style="margin:18px 0 8px;">This account</div>
+    <div id="customerHistory"></div>
+  </div>
+</div>
+
 <div class="sheet" id="expenseSheet">
   <div class="sheet-handle"></div>
   <div class="sheet-header"><h2 id="expenseSheetTitle">Record a cost</h2><button class="sheet-close" data-close>✕</button></div>
@@ -1739,6 +1905,15 @@
         <label>Date</label>
         <input type="date" id="ex-date">
       </div>
+    </div>
+    <div class="field">
+      <label id="ex-paidFromLabel">Paid from</label>
+      <select id="ex-paidFrom">
+        <option value="drawer">The till drawer</option>
+        <option value="gcash">GCash</option>
+        <option value="outside">Somewhere else — not the till</option>
+      </select>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;" id="ex-paidFromNote">Money taken from the drawer comes off tonight's expected cash. Get this wrong and the count shows a shortage that isn't one.</p>
     </div>
     <div class="field">
       <label>Note (optional)</label>
@@ -2222,6 +2397,9 @@
   let productCosts = {}; // productId -> {cost,opCost,markup,competitorPrice} — owner only
   let expenses = []; // running costs + owner draws/advances — owner only, immutable
   let pricingSettings = {}; // settings/pricing — owner-only, so the margin policy stays off the public storefront
+  let customers = [];        // the listahan — who buys on account
+  let customerPayments = []; // what they have paid against it, append-only
+  let cartCustomerId = null; // set when the current sale is going on account
   let pnlMonth = null; // which month the P&L block is showing; null = this month
   let marginSort = "worst";
 
@@ -2328,12 +2506,332 @@
     });
   }
 
-  // A product with no photo falls back to the shop's own logo, which looks
-  // deliberate where a generic icon looks unfinished.
-  function productPlaceholder(){
+  // ---------- Making a phone snap look like a catalogue photo ----------
+  // A photo taken indoors comes out dim, orange from the light bulb, and framed
+  // with half a table in it. None of that needs a better camera or a steadier
+  // hand — it needs three corrections the browser can work out for itself:
+  //   white balance  the wall or paper behind the product ought to be grey, so
+  //                  whatever colour it actually came out is the cast to undo
+  //   levels         push the darkest and lightest tones back out to black and
+  //                  white, which is all "dim" really means
+  //   crop           find where the product actually is, throw away the rest,
+  //                  and pad it to a square so every photo sits the same
+  // What none of this can fix is blur. A shaken or out-of-focus photo stays
+  // blurred, so that one correction still belongs to the person holding the
+  // phone: brace it against something and tap the screen on the product first.
+
+  const PHOTO_WORK_DIM = 1000;   // size the analysis runs at: accurate, still quick
+
+  // What the outer frame of the picture looks like — the surface behind the
+  // product. A low spread means a plain background worth trusting as a
+  // reference; a high one means a cluttered shelf, and we leave the colour be.
+  function photoEdgeStats(data, w, h){
+    const band = Math.max(2, Math.round(Math.min(w, h) * 0.05));
+    let n = 0, r = 0, g = 0, b = 0, lum = 0, lum2 = 0;
+    function take(x, y){
+      const i = (y * w + x) * 4;
+      const R = data[i], G = data[i+1], B = data[i+2];
+      r += R; g += G; b += B;
+      const L = R * 0.299 + G * 0.587 + B * 0.114;
+      lum += L; lum2 += L * L; n++;
+    }
+    for(let y = 0; y < h; y++){
+      if(y < band || y >= h - band){ for(let x = 0; x < w; x++) take(x, y); }
+      else { for(let x = 0; x < band; x++) take(x, y); for(let x = w - band; x < w; x++) take(x, y); }
+    }
+    if(!n) return null;
+    const mean = lum / n;
+    const R = r/n, G = g/n, B = b/n;
+    const hi = Math.max(R, G, B), lo = Math.min(R, G, B);
+    // How strongly coloured the surround is. A wall or a sheet of paper under a
+    // warm bulb comes out a little yellow; a red cigarette pack filling the
+    // whole frame comes out very red. Past a point the "background" is clearly
+    // the product itself, and it must not be used as the white reference —
+    // correcting towards it is what turns a red pack orange.
+    const sat = hi > 0 ? (hi - lo) / hi : 0;
+    return { r:R, g:G, b:B, lum:mean, sat:sat, sd:Math.sqrt(Math.max(0, lum2/n - mean*mean)) };
+  }
+
+  function photoGain(g){ return Math.max(0.72, Math.min(1.42, g)); }
+
+  function photoWhiteBalance(data, edge){
+    // Needs a plain, reasonably lit surround to measure against. A busy shelf
+    // or a near-black table tells us nothing, so nothing is changed.
+    if(!edge || edge.sd > 42) return null;
+    const target = (edge.r + edge.g + edge.b) / 3;
+    if(target < 30) return null;
+    const raw = [target / Math.max(1, edge.r), target / Math.max(1, edge.g), target / Math.max(1, edge.b)];
+    // A wall or a sheet of paper under a warm bulb needs a modest correction —
+    // the blue channel lifted by a third, say. A correction far bigger than
+    // that means the "background" is really the product filling the frame, and
+    // correcting towards it would drain the colour out of the product itself.
+    // Measuring it this way rather than by how colourful the surround looks:
+    // a genuinely orange bulb makes a white wall look very orange indeed, and
+    // that is a photo worth rescuing, not one to give up on.
+    if(raw.some(g => g < 0.5 || g > 2.0)) return null;
+    const gr = photoGain(raw[0]), gg = photoGain(raw[1]), gb = photoGain(raw[2]);
+    if(Math.abs(gr-1) < 0.02 && Math.abs(gg-1) < 0.02 && Math.abs(gb-1) < 0.02) return null;
+    const gains = [gr, gg, gb];
+    applyPhotoGains(data, gains);
+    return gains;   // handed back so the same correction can be redone at full size
+  }
+
+  function applyPhotoGains(data, g){
+    if(!g) return;
+    for(let i = 0; i < data.length; i += 4){
+      data[i]   = Math.min(255, data[i]   * g[0]);
+      data[i+1] = Math.min(255, data[i+1] * g[1]);
+      data[i+2] = Math.min(255, data[i+2] * g[2]);
+    }
+  }
+
+  function applyPhotoLut(data, lut){
+    if(!lut) return;
+    for(let i = 0; i < data.length; i += 4){
+      data[i] = lut[data[i]]; data[i+1] = lut[data[i+1]]; data[i+2] = lut[data[i+2]];
+    }
+  }
+
+  function photoAutoLevels(data){
+    const hist = new Uint32Array(256);
+    let total = 0;
+    for(let i = 0; i < data.length; i += 4){
+      hist[(data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114) | 0]++;
+      total++;
+    }
+    if(!total) return false;
+    let acc = 0, lo = 0, hi = 255;
+    const loCut = total * 0.005, hiCut = total * 0.995;
+    for(let i = 0; i < 256; i++){ acc += hist[i]; if(acc >= loCut){ lo = i; break; } }
+    acc = 0;
+    for(let i = 0; i < 256; i++){ acc += hist[i]; if(acc >= hiCut){ hi = i; break; } }
+    // Already using the full range, or so flat that stretching it would just
+    // amplify the grain.
+    if(hi - lo < 40 || (lo < 10 && hi > 245)) return false;
+    const scale = 245 / (hi - lo);
+    const lut = new Uint8Array(256);
+    for(let i = 0; i < 256; i++) lut[i] = Math.max(0, Math.min(255, Math.round((i - lo) * scale + 6)));
+    applyPhotoLut(data, lut);
+    return lut;
+  }
+
+  // Where the product is: the box around everything that isn't the background.
+  function photoContentBox(data, w, h, edge){
+    if(!edge) return null;
+    const thr = Math.max(78, edge.sd * 6.6);   // summed across the three channels
+    const rows = new Uint32Array(h), cols = new Uint32Array(w);
+    let hits = 0;
+    for(let y = 0; y < h; y++){
+      for(let x = 0; x < w; x++){
+        const i = (y * w + x) * 4;
+        const d = Math.abs(data[i] - edge.r) + Math.abs(data[i+1] - edge.g) + Math.abs(data[i+2] - edge.b);
+        if(d > thr){ rows[y]++; cols[x]++; hits++; }
+      }
+    }
+    if(!hits) return null;
+    // Counting per row and per column rather than taking the outermost
+    // differing pixel in the whole picture. A row is part of the product only
+    // if a real run of it differs; one stray speck is grain. This matters more
+    // than it sounds: a dark photo that has just been brightened is full of
+    // grain, and a single amplified speck in each corner would otherwise draw
+    // a box round the entire frame and defeat the crop completely.
+    const rowMin = Math.max(3, Math.round(w * 0.02));
+    const colMin = Math.max(3, Math.round(h * 0.02));
+    let x0 = -1, y0 = -1, x1 = -1, y1 = -1;
+    for(let y = 0; y < h; y++) if(rows[y] >= rowMin){ if(y0 < 0) y0 = y; y1 = y; }
+    for(let x = 0; x < w; x++) if(cols[x] >= colMin){ if(x0 < 0) x0 = x; x1 = x; }
+    if(x0 < 0 || y0 < 0) return null;
+    const boxArea = (x1 - x0 + 1) * (y1 - y0 + 1);
+    const frac = boxArea / (w * h);
+    // Already fills the frame — nothing to crop to.
+    if(frac > 0.94) return null;
+    // A product photographed from too far away is the case that needs cropping
+    // most, so a small box is allowed. What is not allowed is a box drawn
+    // around two specks in opposite corners: if the box is mostly background,
+    // it isn't a product and the crop would be a guess.
+    if(hits / boxArea < 0.12) return null;
+    if(frac < 0.004) return null;
+    const m = Math.round(Math.min(w, h) * 0.04);
+    const nx0 = Math.max(0, x0 - m), ny0 = Math.max(0, y0 - m);
+    const nx1 = Math.min(w - 1, x1 + m), ny1 = Math.min(h - 1, y1 + m);
+    return { x:nx0, y:ny0, w:nx1 - nx0 + 1, h:ny1 - ny0 + 1 };
+  }
+
+  // Runs the three corrections and returns a square data URL. Any step that
+  // can't be done safely is skipped rather than forced, so the worst case is
+  // the photo comes back as it went in.
+  function tidyPhotoToDataUrl(img, maxDim, quality){
+    let w = img.width, h = img.height;
+    if(w >= h){ if(w > PHOTO_WORK_DIM){ h = Math.round(h * PHOTO_WORK_DIM / w); w = PHOTO_WORK_DIM; } }
+    else { if(h > PHOTO_WORK_DIM){ w = Math.round(w * PHOTO_WORK_DIM / h); h = PHOTO_WORK_DIM; } }
+    const work = document.createElement("canvas");
+    work.width = w; work.height = h;
+    const wctx = work.getContext("2d");
+    wctx.drawImage(img, 0, 0, w, h);
+
+    // The corrections are worked out on this small copy, because measuring a
+    // histogram over twelve million pixels on a phone is slow and tells you
+    // nothing extra. What they produce is a set of numbers — the colour gains,
+    // the brightness curve, the crop box — which are then applied to the
+    // original at full size. Cropping the small copy instead would throw away
+    // the resolution exactly where it is needed: a product photographed from
+    // across the room is a small part of a very large picture.
+    const id = wctx.getImageData(0, 0, w, h);
+    const data = id.data;
+    const gains = photoWhiteBalance(data, photoEdgeStats(data, w, h));
+    const lut   = photoAutoLevels(data);
+    const edge  = photoEdgeStats(data, w, h);   // re-measured: the two above changed it
+    const box   = photoContentBox(data, w, h, edge) || { x:0, y:0, w:w, h:h };
+
+    const k = img.width / w;                    // small copy back up to the original
+    const sx = Math.round(box.x * k), sy = Math.round(box.y * k);
+    const sw = Math.max(1, Math.round(box.w * k)), sh = Math.max(1, Math.round(box.h * k));
+
+    // The crop, at whatever size it deserves — never upscaled past what the
+    // original actually holds.
+    const drawn = Math.min(maxDim, Math.max(sw, sh));
+    const dw = Math.max(1, Math.round(sw * drawn / Math.max(sw, sh)));
+    const dh = Math.max(1, Math.round(sh * drawn / Math.max(sw, sh)));
+    const crop = document.createElement("canvas");
+    crop.width = dw; crop.height = dh;
+    const cctx = crop.getContext("2d");
+    cctx.drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
+    if(gains || lut){
+      const cid = cctx.getImageData(0, 0, dw, dh);
+      applyPhotoGains(cid.data, gains);
+      applyPhotoLut(cid.data, lut);
+      cctx.putImageData(cid, 0, 0);
+    }
+
+    // Squared off, so every product sits the same in a grid. Padded with the
+    // background so the join doesn't show — unless that background is nearly
+    // white, or is really the product itself, in which case plain white.
+    const out = document.createElement("canvas");
+    out.width = drawn; out.height = drawn;
+    const octx = out.getContext("2d");
+    octx.fillStyle = (!edge || edge.lum > 232 || edge.sat > 0.35)
+      ? "#FFFFFF"
+      : "rgb(" + Math.round(edge.r) + "," + Math.round(edge.g) + "," + Math.round(edge.b) + ")";
+    octx.fillRect(0, 0, drawn, drawn);
+    octx.drawImage(crop, Math.round((drawn - dw) / 2), Math.round((drawn - dh) / 2));
+    return out.toDataURL("image/jpeg", quality);
+  }
+
+  function loadImageFromFile(file){
+    return new Promise((resolve, reject) => {
+      if(!file || !file.type || file.type.indexOf("image/") !== 0){ reject(new Error("not an image")); return; }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("bad image"));
+        img.src = e.target.result;
+      };
+      reader.onerror = () => reject(new Error("read failed"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Tidying is best-effort. If anything about it fails the plain resize still
+  // runs, so a photo is never lost to a correction that didn't work.
+  async function preparePhotoFile(file, tidy, maxDim, quality){
+    if(tidy){
+      try{
+        const img = await loadImageFromFile(file);
+        const url = tidyPhotoToDataUrl(img, maxDim, quality);
+        if(url) return url;
+      }catch(err){ console.warn("tidy failed, using the photo as it is", err); }
+    }
+    return resizeImageFile(file, maxDim, quality);
+  }
+
+  // Category glyphs. Drawn on a 24x24 grid, filled with currentColor so they
+  // take the shop's theme colour. Bold shapes only — these are read at 48px in a
+  // product list, where a thin outline turns to mush.
+  const CATEGORY_GLYPHS = {
+    can:'<ellipse cx="12" cy="6.4" rx="7.6" ry="2.7"/><path d="M4.4 6.4v11c0 1.49 3.4 2.7 7.6 2.7s7.6-1.21 7.6-2.7v-11c0 1.49-3.4 2.7-7.6 2.7S4.4 7.89 4.4 6.4z"/><path d="M4.4 10.8h15.2v4.6H4.4z" fill="#fff" opacity=".42"/>',
+    bottle:'<rect x="9.7" y="1.4" width="4.6" height="3" rx=".7"/><path d="M10.4 4.4h3.2v2.5c0 1.5 2.7 2.9 2.7 5V20a2 2 0 0 1-2 2h-4.6a2 2 0 0 1-2-2v-8.1c0-2.1 2.7-3.5 2.7-5V4.4z"/><rect x="8.2" y="13" width="7.6" height="4.6" fill="#fff" opacity=".45"/>',
+    softdrink:'<circle cx="18.8" cy="3.6" r="1.5" opacity=".55"/><circle cx="21" cy="7.4" r="1" opacity=".4"/><rect x="9.8" y="1.6" width="4.4" height="2.4" rx=".6"/><path d="M9.6 4h4.8v2.2c0 1.7 2.1 2.6 2.1 4.6 0 1.3-1.2 1.8-1.2 2.7s1.2 1.4 1.2 2.6V20a2 2 0 0 1-2 2H9.5a2 2 0 0 1-2-2v-3.9c0-1.2 1.2-1.7 1.2-2.6s-1.2-1.4-1.2-2.7c0-2 2.1-2.9 2.1-4.6V4z"/>',
+    tub:'<rect x="2.6" y="3.4" width="18.8" height="3.6" rx="1.4"/><path d="M4.4 8.2h15.2l-1.5 11.5A2 2 0 0 1 16.1 21.5H7.9a2 2 0 0 1-2-1.8L4.4 8.2z"/>',
+    soap:'<rect x="2.6" y="7" width="18.8" height="10" rx="5"/><ellipse cx="8.4" cy="10.6" rx="2.6" ry="1.5" opacity=".4" fill="#fff"/>',
+    sachet:'<path d="M5.6 6.4h12.8v13.4a1.8 1.8 0 0 1-1.8 1.8H7.4a1.8 1.8 0 0 1-1.8-1.8V6.4z"/><path d="M5.6 6.4l2.13-3.2 2.14 3.2 2.13-3.2 2.14 3.2 2.13-3.2 2.14 3.2z"/>',
+    pack:'<path d="M5.8 2.2h12.4v1.9H5.8z" opacity=".5"/><path d="M5.2 4.6h13.6v15.6a1.8 1.8 0 0 1-1.8 1.8H7A1.8 1.8 0 0 1 5.2 20.2V4.6z"/><path d="M5.2 9.4h13.6v4.8H5.2z" fill="#fff" opacity=".42"/>',
+    carton:'<path d="M6.4 8.8h11.2v11.4a1.8 1.8 0 0 1-1.8 1.8H8.2a1.8 1.8 0 0 1-1.8-1.8V8.8z"/><path d="M6.4 8.8 12 3.2l5.6 5.6z" opacity=".5"/><path d="M15.4 1.2h4.4v2.2h-2.2v5.4h-2.2z"/>',
+    bag:'<path d="M8.4 8V6.6a3.6 3.6 0 0 1 7.2 0V8" fill="none" stroke="currentColor" stroke-width="2.1"/><path d="M4.4 8h15.2l-1.3 12.1a2 2 0 0 1-2 1.8H7.7a2 2 0 0 1-2-1.8L4.4 8z"/>',
+    broom:'<rect x="10.9" y="1.8" width="2.2" height="9.6" rx="1.1"/><path d="M7 11.4h10l1.8 9.4a1 1 0 0 1-1 1.2H6.2a1 1 0 0 1-1-1.2L7 11.4z"/><path d="M9 13.2v8M12 13.2v8M15 13.2v8" stroke="#fff" stroke-width="1.1" opacity=".45"/>',
+    brush:'<rect x="3" y="14.4" width="15" height="3.4" rx="1.7"/><path d="M17 13.4h3.4a1.6 1.6 0 0 1 0 5.4H17z"/><path d="M5 14.4v-3M8 14.4v-3.8M11 14.4v-3M14 14.4v-3.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+    rollon:'<path d="M8.6 8.4h6.8v11.4a2 2 0 0 1-2 2h-2.8a2 2 0 0 1-2-2V8.4z"/><path d="M12 1.8a4.2 4.2 0 0 1 4.2 4.2v2.4H7.8V6A4.2 4.2 0 0 1 12 1.8z"/>',
+    jar:'<rect x="4.4" y="2.4" width="15.2" height="4" rx="1.2"/><path d="M6.2 7.4h11.6v12a2.4 2.4 0 0 1-2.4 2.4H8.6a2.4 2.4 0 0 1-2.4-2.4v-12z"/>',
+    blade:'<rect x="2.4" y="7" width="19.2" height="10" rx="1.6"/><rect x="7.4" y="10.4" width="9.2" height="3.2" rx="1.6" fill="#fff" opacity=".55"/>',
+    flame:'<path d="M12 1.8c3.4 4 5.6 6.3 5.6 10.1a5.6 5.6 0 1 1-11.2 0C6.4 8.1 8.6 5.8 12 1.8z"/><path d="M12 11.4c1.5 1.8 2.4 2.8 2.4 4.4a2.4 2.4 0 1 1-4.8 0c0-1.6.9-2.6 2.4-4.4z" fill="#fff" opacity=".5"/>',
+    cheese:'<path d="M2.6 12.2 19 5.6a2 2 0 0 1 2.4 1.9v9.9a1.8 1.8 0 0 1-1.8 1.8H4.4a1.8 1.8 0 0 1-1.8-1.8v-5.2z"/><circle cx="8.6" cy="14.6" r="1.7" fill="#fff" opacity=".5"/><circle cx="15.4" cy="12.4" r="1.3" fill="#fff" opacity=".5"/>',
+    bread:'<path d="M3.4 13a5.4 5.4 0 0 1 3.8-5.2 5.6 5.6 0 0 1 10.6 0A5.4 5.4 0 0 1 20.6 13v5.6a1.8 1.8 0 0 1-1.8 1.8H5.2a1.8 1.8 0 0 1-1.8-1.8V13z"/><path d="M8 11.6v6.4M12 11v7M16 11.6v6.4" stroke="#fff" stroke-width="1.2" opacity=".4"/>',
+    spray:'<rect x="7.4" y="7.4" width="9.2" height="14.4" rx="2"/><rect x="9.4" y="3.6" width="5.2" height="3.8"/><rect x="14.8" y="2" width="4.4" height="2" rx="1"/>',
+    dish:'<circle cx="18.4" cy="4" r="2" opacity=".55"/><circle cx="21.2" cy="8.4" r="1.2" opacity=".4"/><circle cx="16.6" cy="9" r="1" opacity=".35"/><path d="M8.8 1.8h3.6v2.4H8.8z"/><path d="M7.4 4.6h6.4c1.3 0 2.2 1.1 2.2 2.4V20a2 2 0 0 1-2 2H7.2a2 2 0 0 1-2-2V7c0-1.3.9-2.4 2.2-2.4z"/><path d="M5.2 11h10.8v4.4H5.2z" fill="#fff" opacity=".45"/>',
+    tape:'<circle cx="12" cy="12" r="9.4"/><circle cx="12" cy="12" r="3.6" fill="#fff" opacity=".6"/>',
+    pencil:'<path d="M3.4 17.2 15.6 5l3.4 3.4L6.8 20.6l-4.2.8z"/><path d="M16.8 3.8 18 2.6a1.8 1.8 0 0 1 2.6 0l1.2 1.2a1.8 1.8 0 0 1 0 2.6l-1.2 1.2z" opacity=".5"/>',
+    tissue:'<path d="M3 12.4h18v7.2a1.8 1.8 0 0 1-1.8 1.8H4.8A1.8 1.8 0 0 1 3 19.6v-7.2z"/><path d="M9.4 12.4V7.8a2.6 2.6 0 0 1 5.2 0v4.6z" opacity=".5"/>',
+    utensil:'<path d="M6 2.4v7.2a2.6 2.6 0 0 0 1.6 2.4V21.6h2V12a2.6 2.6 0 0 0 1.6-2.4V2.4H9.4v5.4H8.2V2.4H7v5.4H5.8V2.4z"/><path d="M16.6 2.4c2 0 3.4 2.6 3.4 5.6 0 2.4-1 4-2.4 4.4v9.2h-2V12.4c-1.4-.4-2.4-2-2.4-4.4 0-3 1.4-5.6 3.4-5.6z"/>',
+    cart:'<path d="M2.6 3.4h3.2l3 12.2h10.2l2.4-8.8H7.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="10.4" cy="19.6" r="1.9"/><circle cx="17.8" cy="19.6" r="1.9"/>'
+  };
+
+  // Category names drift — "Canned" and "Canned Goods", "Juice" and "Juices",
+  // "Cigar" and "Cigarettes" all exist in the same shop. Matching on a keyword
+  // rather than the exact name means a category typed in tomorrow still lands on
+  // a sensible picture. First match wins, so the specific ones come first.
+  const CATEGORY_RULES = [
+    [/sardine|tuna|canned|^can\b|condense/, "can"],
+    [/ice ?cream/, "tub"],
+    [/soap|detergent/, "soap"],
+    [/drinking water|distilled|mineral|purified|^water/, "bottle"],
+    [/soda|juice|energy|electrolyte|soft ?drink/, "softdrink"],
+    [/cigar|tobacco/, "pack"],
+    [/coffee|caffeine|milk drink/, "carton"],
+    [/milk|noodle|lentil|starch|breading|flour/, "pack"],
+    [/seasoning|powder|strip|sachet/, "sachet"],
+    [/bag/, "bag"],
+    [/native|broom|walis/, "broom"],
+    [/hygiene|brush|tooth/, "brush"],
+    [/deodorant|cologne|perfume/, "rollon"],
+    [/pomade|cream|ointment|hair polish|nail polish|cosmetic/, "jar"],
+    [/blade|razor/, "blade"],
+    [/match|lighter/, "flame"],
+    [/cheese/, "cheese"],
+    [/bread|pastry/, "bread"],
+    [/insecticide|spray/, "spray"],
+    [/dishwash|dish/, "dish"],
+    [/tape|supplies/, "tape"],
+    [/school|pencil|pen\b/, "pencil"],
+    [/tissue/, "tissue"],
+    [/utensil/, "utensil"],
+    [/liniment|antiseptic|condiment|household|oil|sauce|vinegar/, "bottle"]
+  ];
+
+  function categoryGlyphName(category){
+    const c = String(category || "").toLowerCase().trim();
+    if(!c) return "cart";
+    for(const [re, name] of CATEGORY_RULES) if(re.test(c)) return name;
+    return "cart";
+  }
+
+  // Rendered inline rather than stored on the product. A stored picture is
+  // copied into every product record, which every shopper then downloads; this
+  // costs nothing, follows the shop's colour the moment it is changed, and
+  // corrects itself if a product is recategorised.
+  function categoryTile(category){
+    const g = CATEGORY_GLYPHS[categoryGlyphName(category)] || CATEGORY_GLYPHS.cart;
+    return `<span class="cat-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor">${g}</svg></span>`;
+  }
+
+  // A product with no photo shows its category instead. A drawing of a tin
+  // tells you more than the shop logo repeated two hundred times, and unlike a
+  // photograph of someone else's packaging it is ours to use.
+  function productPlaceholder(product){
+    const cat = product && product.category;
+    if(cat) return categoryTile(cat);
     return designSettings.logo
       ? `<img src="${designSettings.logo}" alt="" style="width:60%;height:60%;object-fit:contain;opacity:.5;">`
-      : `<span class="placeholder">🛒</span>`;
+      : categoryTile("");
   }
 
   // ---------- Product lookup by barcode ----------
@@ -2382,6 +2880,107 @@
       console.error(err);
       box.innerHTML = `<div style="font-size:12.5px;color:var(--danger);">Couldn't reach the database — check your connection, or just photograph the item.</div>`;
     }
+  }
+
+  // ---------- Finding a photo that is free to use ----------
+  // Openverse indexes around 700 million openly licensed pictures from
+  // Wikimedia Commons, Flickr, museums and the rest of the open web. Every
+  // result carries its licence, and the licence and the photographer go onto
+  // the product automatically — an attribution you have to remember to write
+  // down is an attribution that eventually isn't there.
+  //
+  // The filter is set to commercial use only. A shop is a business, so a
+  // picture that is free for personal use is no use here at all.
+  const OPENVERSE_ENDPOINT = "https://api.openverse.org/v1/images/";
+
+  function openFreePhotoPanel(){
+    const panel = $("freePhotoPanel");
+    const open = panel.style.display !== "none";
+    if(open){ panel.style.display = "none"; return; }
+    panel.style.display = "block";
+    const name = ($("pf-name").value || "").trim();
+    const brand = ($("pf-brand").value || "").trim();
+    if(!$("freePhotoQuery").value) $("freePhotoQuery").value = name;
+    const note = $("freePhotoNote");
+    // A brand on the product is the case to be careful about. The licence
+    // covers the photograph; it says nothing about the packaging design or the
+    // name on it, and Openverse states plainly that it does not check those.
+    note.innerHTML = brand && !/^(generic|local)$/i.test(brand)
+      ? `<b>${escapeHtml(brand)} is a brand.</b> A free licence covers the photograph, not the packaging design or the name on it. For branded stock a supplier pack is the safe route &mdash; use a result here only if it plainly shows the item you actually sell.`
+      : `No brand on this one, so a free-licensed picture is straightforward. Search for the plain thing &mdash; &ldquo;toothbrush&rdquo;, &ldquo;plastic comb&rdquo; &mdash; not a brand name.`;
+    if(name) searchFreePhotos();
+  }
+
+  async function searchFreePhotos(){
+    const box = $("freePhotoResults");
+    const q = ($("freePhotoQuery").value || "").trim();
+    if(!q){ box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Type what the thing is first.</div>`; return; }
+    box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Searching…</div>`;
+    try{
+      const url = OPENVERSE_ENDPOINT + "?q=" + encodeURIComponent(q)
+        + "&license_type=commercial&page_size=12&mature=false";
+      const res = await fetch(url, { headers: { "Accept": "application/json" } });
+      if(res.status === 429){
+        box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Too many searches for now — Openverse limits how often it can be asked. Wait a minute and try again.</div>`;
+        return;
+      }
+      if(!res.ok) throw new Error("status " + res.status);
+      const data = await res.json();
+      const hits = (data && data.results) || [];
+      if(!hits.length){
+        box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Nothing free-to-use matched that. Try plainer words, or photograph it yourself.</div>`;
+        return;
+      }
+      freePhotoHits = hits;
+      // Field names are read defensively: this is somebody else's API and it is
+      // free to change shape without telling us.
+      box.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">` + hits.map((h, i) => {
+        const thumb = h.thumbnail || h.url || "";
+        const lic = String(h.license || "").toUpperCase() + (h.license_version ? " " + h.license_version : "");
+        return `<button type="button" class="free-photo-hit" data-i="${i}" style="padding:0;border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:hidden;text-align:left;cursor:pointer;">
+          <img src="${escapeHtml(thumb)}" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">
+          <span style="display:block;font-size:9.5px;color:var(--text-muted);padding:4px 5px;line-height:1.3;">${escapeHtml(lic || "open licence")}<br>${escapeHtml((h.creator || "unknown").slice(0,18))}</span>
+        </button>`;
+      }).join("") + `</div>
+      <p style="font-size:10.5px;color:var(--text-muted);line-height:1.5;margin:8px 0 0;">From Openverse. Tap one to use it — the licence and the photographer are recorded against the product for you.</p>`;
+      Array.prototype.forEach.call(box.querySelectorAll(".free-photo-hit"), b => {
+        b.onclick = () => adoptFreePhoto(freePhotoHits[Number(b.getAttribute("data-i"))]);
+      });
+    }catch(err){
+      console.error(err);
+      box.innerHTML = `<div style="font-size:12.5px;color:var(--danger);">Couldn't reach the picture search — check your connection, or photograph the item instead.</div>`;
+    }
+  }
+
+  let freePhotoHits = [];
+
+  async function adoptFreePhoto(hit){
+    if(!hit) return;
+    const box = $("freePhotoResults");
+    box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Fetching the picture…</div>`;
+    // The proxied copy first: the original may sit on a server that refuses to
+    // hand the pixels to another site, which leaves the picture visible on
+    // screen but impossible to save.
+    const candidates = [];
+    if(hit.id) candidates.push(OPENVERSE_ENDPOINT + encodeURIComponent(hit.id) + "/thumb/");
+    if(hit.url) candidates.push(hit.url);
+    if(hit.thumbnail) candidates.push(hit.thumbnail);
+    let dataUrl = null;
+    for(const c of candidates){
+      try{ dataUrl = await imageUrlToDataUrl(c, 640, 0.72); }catch(e){ dataUrl = null; }
+      if(dataUrl) break;
+    }
+    if(!dataUrl){
+      box.innerHTML = `<div style="font-size:12.5px;color:var(--danger);">That one couldn't be copied across. Try another result, or open it and save it to your phone first.</div>`;
+      return;
+    }
+    currentImageData = dataUrl;
+    currentThumbData = await makeThumbFromDataUrl(dataUrl, 220, 0.62);
+    const lic = String(hit.license || "").toUpperCase() + (hit.license_version ? " " + hit.license_version : "");
+    currentImageCredit = [hit.creator || "unknown photographer", lic || "open licence", "via Openverse"].join(" · ");
+    updatePhotoPreview();
+    $("freePhotoPanel").style.display = "none";
+    showToast("Photo added, credit recorded");
   }
 
   // Copies the looked-up photo into the product the same way an uploaded one is
@@ -3089,7 +3688,10 @@
       row.className = "report-download-row";
       row.innerHTML = `
         <span class="name">${escapeHtml(label)} ${reversed ? "(reversal)" : ""}
-          <span style="font-weight:400;color:var(--text-muted);">${escapeHtml(e.date || "")}${e.note ? " · " + escapeHtml(e.note) : ""}</span>
+          <span style="font-weight:400;color:var(--text-muted);">${escapeHtml(e.date || "")}${
+            (e.paidFrom || "outside") === "drawer" ? " · from the drawer"
+            : (e.paidFrom === "gcash" ? " · GCash" : "")
+          }${e.note ? " · " + escapeHtml(e.note) : ""}</span>
         </span>
         <div class="actions">
           <b style="margin-right:8px;">${reversed ? "−" : ""}${peso(e.amount)}</b>
@@ -3115,8 +3717,27 @@
     $("ex-amount").value = "";
     $("ex-note").value = "";
     $("ex-date").value = todayISO();
+    $("ex-paidFrom").value = "drawer";
+    updatePaidFromWording();
     $("saveExpenseBtn").dataset.ownerCash = ownerCash ? "1" : "";
     openSheet("expenseSheet");
+  }
+
+  // "Paid from" and "put in from" are the same field pointing opposite ways —
+  // an owner putting money INTO the till is the one case where the drawer gains.
+  function updatePaidFromWording(){
+    const kindEl = $("ex-kind");
+    const isAdvance = $("ownerCashKindField") &&
+      $("ownerCashKindField").style.display !== "none" &&
+      kindEl && kindEl.value === "ownerAdvance";
+    const label = $("ex-paidFromLabel"), sel = $("ex-paidFrom"), note = $("ex-paidFromNote");
+    if(!label || !sel || !note) return;
+    label.textContent = isAdvance ? "Put in where" : "Paid from";
+    sel.options[0].textContent = isAdvance ? "Into the till drawer" : "The till drawer";
+    sel.options[2].textContent = isAdvance ? "Somewhere else — not the till" : "Somewhere else — not the till";
+    note.textContent = isAdvance
+      ? "Money put into the drawer is added to tonight's expected cash."
+      : "Money taken from the drawer comes off tonight's expected cash. Get this wrong and the count shows a shortage that isn't one.";
   }
 
   async function saveExpense(){
@@ -3133,6 +3754,13 @@
         category: ownerCash ? "owner" : $("ex-category").value,
         amount: Math.round(amount * 100) / 100,
         sign: 1,
+        // Where the money physically came from, which is a different question
+        // from what it was for. A bill settled from the till leaves the drawer
+        // light tonight; the same bill paid by GCash or out of your own pocket
+        // does not. Without this the count is short every time you pay for
+        // anything at the counter, and a count that is always wrong stops
+        // being a control.
+        paidFrom: $("ex-paidFrom").value,
         note: $("ex-note").value.trim() || null,
         byUid: (auth.currentUser && auth.currentUser.uid) || null,
         byName: currentUserName || "Owner",
@@ -3159,6 +3787,7 @@
         category: e.category,
         amount: Number(e.amount) || 0,
         sign: -1,
+        paidFrom: e.paidFrom || "outside",
         reversesId: e.id,
         note: "Reverses: " + (e.note || expenseCategoryLabel(e.category)),
         byUid: (auth.currentUser && auth.currentUser.uid) || null,
@@ -3201,24 +3830,80 @@
   // Retyping a hundred products is the reason shops stay on a till they have
   // outgrown, so this accepts whatever shape the old list is in: commas or
   // tabs, with or without a header row.
+  // Columns can be named in a header row, which is what makes this able to do
+  // more than add products. Without a header the old shape still works exactly
+  // as before — name, price, stock, category — so nothing that used to import
+  // stops importing.
+  //
+  //   match     how to find the product that already exists (falls back to name)
+  //   sku       the shop's own code
+  //   name      what it should be called
+  //   category  which group it belongs in
+  //   unit      pack, can, bottle, sachet…
+  //   price     what you charge
+  //   stock     how many you have
+  //
+  // ONLY the columns present are written. A file carrying match, sku, name and
+  // unit renames and codes 176 products without touching a single price or
+  // stock figure — which matters when the figures in the POS are more current
+  // than the ones in the file.
+  const IMPORT_COLUMNS = ["match","sku","name","brand","size","category","unit","price","stock","barcode"];
+
+  function splitImportLine(line){
+    return line.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
+      .map(c => c.trim().replace(/^"|"$/g, ""));
+  }
+
   function parseImportLines(raw){
     const rows = [];
     const errors = [];
-    String(raw || "").split(/\r?\n/).forEach((line, i) => {
-      const text = line.trim();
-      if(!text) return;
-      const parts = text.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
-        .map(c => c.trim().replace(/^"|"$/g, ""));
-      // A header row names itself; skip it rather than importing "Name" as a product.
-      if(i === 0 && /^(name|product|item)$/i.test(parts[0] || "")) return;
-      const name = parts[0] || "";
-      if(!name){ return; }
-      const price = parseFloat(parts[1]);
-      const stock = parseFloat(parts[2]);
-      if(isNaN(price)){
-        errors.push(`"${name}" — no price found`);
+    const lines = String(raw || "").split(/\r?\n/).filter(l => l.trim());
+    if(lines.length === 0) return { rows, errors, columns: null };
+
+    // A header is a first row whose cells are ALL column names. "Coke, 20, 5"
+    // is not a header even though nothing in it is numeric-only.
+    const firstCells = splitImportLine(lines[0]).map(c => c.toLowerCase());
+    const isHeader = firstCells.length > 1 &&
+      firstCells.every(c => IMPORT_COLUMNS.indexOf(c) !== -1);
+    const columns = isHeader ? firstCells : null;
+    const body = isHeader ? lines.slice(1) : lines;
+
+    body.forEach((line, bodyIndex) => {
+      const parts = splitImportLine(line);
+      if(!parts.length) return;
+
+      if(columns){
+        const row = {};
+        columns.forEach((col, idx) => {
+          const raw = (parts[idx] || "").trim();
+          if(raw === "") return;
+          if(col === "price" || col === "stock"){
+            const v = parseFloat(raw);
+            if(!isNaN(v)) row[col] = v;
+          } else {
+            row[col] = raw;
+          }
+        });
+        const key = row.match || row.name || row.sku;
+        if(!key) return;
+        // Adding a product still needs a price; updating one does not.
+        if(!row.match && !row.sku && row.price == null){
+          errors.push('"' + (row.name || key) + '" — no price found');
+          return;
+        }
+        rows.push(row);
         return;
       }
+
+      // Headerless: the original four columns.
+      const name = parts[0] || "";
+      if(!name) return;
+      // Only the FIRST line can be a stray header. Skipping "name" anywhere in
+      // the file would silently drop a real product further down.
+      if(bodyIndex === 0 && /^(name|product|item)$/i.test(name)) return;
+      const price = parseFloat(parts[1]);
+      const stock = parseFloat(parts[2]);
+      if(isNaN(price)){ errors.push('"' + name + '" — no price found'); return; }
       rows.push({
         name: name,
         price: price,
@@ -3226,7 +3911,50 @@
         category: (parts[3] || "Uncategorized").trim() || "Uncategorized"
       });
     });
-    return { rows, errors };
+    return { rows, errors, columns };
+  }
+
+  // Which existing product a row is talking about. The "match" column wins,
+  // then the SKU, then the name — so a file can rename something without
+  // losing track of which thing it is renaming.
+  function findExistingProduct(row){
+    const byName = {};
+    products.forEach(pr => { byName[String(pr.name || "").trim().toLowerCase()] = pr; });
+    if(row.match){
+      const hit = byName[row.match.trim().toLowerCase()];
+      if(hit) return hit;
+    }
+    if(row.sku){
+      const hit = products.find(pr => String(pr.sku || "").trim().toLowerCase() === row.sku.trim().toLowerCase());
+      if(hit) return hit;
+    }
+    if(row.name) return byName[row.name.trim().toLowerCase()] || null;
+    return null;
+  }
+
+  // What this row would actually change on that product, field by field. An
+  // empty list means the row is already true and nothing needs writing.
+  function importRowDiff(row, product){
+    const out = [];
+    const cmpText = (field, next) => {
+      if(next == null) return;
+      const now = String(product[field] == null ? "" : product[field]);
+      if(now !== String(next)) out.push({ field, from: now, to: String(next) });
+    };
+    cmpText("sku", row.sku);
+    cmpText("name", row.name);
+    cmpText("brand", row.brand);
+    cmpText("size", row.size);
+    cmpText("barcode", row.barcode);
+    cmpText("category", row.category);
+    cmpText("unit", row.unit);
+    if(row.price != null && Math.abs((Number(product.price) || 0) - row.price) > 0.005){
+      out.push({ field: "price", from: peso(product.price), to: peso(row.price), money: true });
+    }
+    if(row.stock != null && Math.abs((Number(product.stock) || 0) - row.stock) > 0.005){
+      out.push({ field: "stock", from: formatStock(product.stock), to: formatStock(row.stock) });
+    }
+    return out;
   }
 
   function previewImport(){
@@ -3237,25 +3965,25 @@
       box.innerHTML = `<div class="margin-note">Nothing readable yet. Each line needs at least a name and a price, separated by a comma.</div>`;
       return;
     }
-    // Names are matched case- and space-insensitively, because the same product
-    // is rarely typed identically twice.
-    const byName = {};
-    products.forEach(p => { byName[p.name.trim().toLowerCase()] = p; });
-
     const fresh = [];
-    const changes = [];   // already here, and the pasted figures differ
+    const changes = [];   // already here, and the file says something different
     const same = [];      // already here, nothing to change
+    const orphans = [];   // the file points at something that isn't here
 
     rows.forEach(r => {
-      const hit = byName[r.name.trim().toLowerCase()];
-      if(!hit){ fresh.push(r); return; }
-      const priceChanged = Math.abs((Number(hit.price) || 0) - r.price) > 0.005;
-      const stockChanged = Math.abs((Number(hit.stock) || 0) - r.stock) > 0.005;
-      if(priceChanged || stockChanged){
-        changes.push({ row: r, product: hit, priceChanged, stockChanged });
-      } else {
-        same.push(r);
+      const hit = findExistingProduct(r);
+      if(!hit){
+        // A row that names what it is updating, against a product that doesn't
+        // exist, is a mistake rather than a new product — adding it would make
+        // a duplicate under the new name and leave the old one behind.
+        if(r.match || (r.sku && !r.price)) orphans.push(r);
+        else if(r.price != null) fresh.push(r);
+        else orphans.push(r);
+        return;
       }
+      const diff = importRowDiff(r, hit);
+      if(diff.length) changes.push({ row: r, product: hit, diff });
+      else same.push(r);
     });
 
     let html = "";
@@ -3264,6 +3992,11 @@
     }
     if(same.length > 0){
       html += `<div class="margin-note">${same.length} already match what you have — nothing to do for those.</div>`;
+    }
+    if(orphans.length > 0){
+      html += `<div class="margin-note">${orphans.length} line${orphans.length === 1 ? "" : "s"} point at products that aren't here: ${
+        escapeHtml(orphans.slice(0,3).map(o => o.match || o.name || o.sku).join("; "))
+      }${orphans.length > 3 ? "…" : ""}. Nothing was added for those — check the spelling rather than letting them in as duplicates.</div>`;
     }
 
     if(fresh.length > 0){
@@ -3288,13 +4021,15 @@
       html += `<div style="font-size:13px;font-weight:700;margin:16px 0 6px;">${changes.length} product${changes.length === 1 ? "" : "s"} would change</div>`;
       html += `<div class="margin-note">Check these before you accept them — this replaces what's in the POS now, and it can't be undone.</div>`;
       html += `<div style="max-height:220px;overflow-y:auto;margin-top:8px;">`;
+      const LABEL = { sku:"code", name:"name", brand:"brand", size:"size", barcode:"barcode",
+                      category:"category", unit:"unit", price:"price", stock:"in stock" };
       changes.slice(0, 40).forEach(c => {
-        const bits = [];
-        if(c.priceChanged) bits.push(`${peso(c.product.price)} → <b>${peso(c.row.price)}</b>`);
-        if(c.stockChanged) bits.push(`${formatStock(c.product.stock)} → <b>${formatStock(c.row.stock)}</b> in stock`);
+        const bits = c.diff.map(d =>
+          `${LABEL[d.field]}: ${d.from ? escapeHtml(d.from) : "—"} → <b>${escapeHtml(d.to)}</b>`
+        );
         html += `<div style="padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;">
-          <div>${escapeHtml(c.row.name)}</div>
-          <div style="color:var(--text-muted);margin-top:2px;">${bits.join(" · ")}</div>
+          <div>${escapeHtml(c.product.name)}</div>
+          <div style="color:var(--text-muted);margin-top:2px;">${bits.join("<br>")}</div>
         </div>`;
       });
       if(changes.length > 40) html += `<div style="font-size:12px;color:var(--text-muted);padding-top:6px;">…and ${changes.length - 40} more</div>`;
@@ -3302,7 +4037,7 @@
       html += `<button type="button" class="btn btn-secondary" id="confirmUpdateBtn" style="margin-top:12px;">Update these ${changes.length} products</button>`;
     }
 
-    if(fresh.length === 0 && changes.length === 0 && same.length === 0){
+    if(fresh.length === 0 && changes.length === 0 && same.length === 0 && orphans.length === 0){
       html = `<div class="margin-note">Nothing readable yet. Each line needs at least a name and a price, separated by a comma.</div>`;
     }
 
@@ -3318,7 +4053,7 @@
   // those, and blanking them would undo work already done here.
   async function runImportUpdate(changes){
     const btn = $("confirmUpdateBtn");
-    if(!confirm(`Replace the price and stock of ${changes.length} product${changes.length === 1 ? "" : "s"} with the pasted figures?\n\nThis can't be undone.`)) return;
+    if(!confirm(`Apply these changes to ${changes.length} product${changes.length === 1 ? "" : "s"}?\n\nOnly the columns in your file are touched — anything it leaves out stays as it is. This can't be undone.`)) return;
     btn.disabled = true;
     let done = 0;
     try{
@@ -3326,11 +4061,16 @@
         const chunk = changes.slice(i, i + 200);
         const batch = db.batch();
         chunk.forEach(c => {
-          batch.update(db.collection("products").doc(c.product.id), {
-            price: c.row.price,
-            stock: c.row.stock,
-            category: c.row.category || c.product.category || "Uncategorized"
+          // Built from the diff rather than from the row, so a column the file
+          // didn't carry is never written — not even as the value it already
+          // had, which would still stamp over a change made since.
+          const patch = {};
+          c.diff.forEach(d => {
+            if(d.field === "price") patch.price = c.row.price;
+            else if(d.field === "stock") patch.stock = c.row.stock;
+            else patch[d.field] = c.row[d.field];
           });
+          if(Object.keys(patch).length) batch.update(db.collection("products").doc(c.product.id), patch);
         });
         await batch.commit();
         done += chunk.length;
@@ -3359,9 +4099,14 @@
           batch.set(db.collection("products").doc(), {
             name: r.name,
             localName: null,
+            sku: r.sku || null,
+            unit: r.unit || null,
+            brand: r.brand || null,
+            size: r.size || null,
+            barcode: r.barcode || null,
             price: r.price,
             stock: r.stock,
-            category: r.category,
+            category: r.category || "Uncategorized",
             threshold: 5,
             image: null,
             thumb: null,
@@ -3400,6 +4145,7 @@
     { key: "margins",  label: "Costs & profit margins",    hint: "Base cost, markup, margin reporting" },
     { key: "staff",    label: "Staff & manager accounts",  hint: "Separate logins per cashier" },
     { key: "buying",   label: "Suppliers & ordering",      hint: "What you owe suppliers, and what to reorder" },
+    { key: "utang",    label: "Utang / customer accounts", hint: "Let regular customers buy on the book and settle on payday" },
     { key: "scpwd",    label: "Senior & PWD discount",     hint: "5% on basic necessities, 20% on medicines. BMBEs and co-ops are exempt — switch off if that's you" }
   ];
 
@@ -3505,6 +4251,23 @@
     // someone to stare at empty boxes; the security is in the rules.
     //
     // This runs last on purpose: it must win over the feature toggles above.
+    // The utang switch has to reach the payment dropdown as well, not just the
+    // book. Hiding the ledger while leaving "charge to an account" in the list
+    // would let a cashier start something the shop has switched off.
+    const utangOn = featureOn("utang");
+    ["payUtangOption","refundUtangOption"].forEach(id => {
+      const el = $(id);
+      if(el) el.hidden = !utangOn;
+    });
+    if(!utangOn){
+      // A cart left mid-sale must not keep a method that no longer exists.
+      if($("cartPayment") && $("cartPayment").value === "utang"){
+        $("cartPayment").value = "cash";
+        if(typeof renderCartCustomer === "function") renderCartCustomer();
+      }
+      if($("rt-method") && $("rt-method").value === "utang") $("rt-method").value = "cash";
+    }
+
     if(currentUserRole !== "owner"){
       ["pricingHelperBlock","competitorDisclaimer","marginBlock",
        "pricingHelperSection","staffBlock","birBlock","pnlBlock","stockValueBlock","breakEvenBlock","pricingSettingsBlock",
@@ -4393,6 +5156,24 @@
       renderBuyingView();
     }, (err) => { console.error(err); showToast("Couldn't load products"); }));
 
+    // The listahan is needed by anyone working the counter — staff charge to it
+    // and take payments against it — so these sit with the shared listeners,
+    // not the owner-only ones.
+    listenerUnsubs.push(db.collection("customers").onSnapshot((snap) => {
+      customers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderUtangList();
+      renderCartCustomer();
+      renderReceivables();
+    }, (err) => { console.error(err); }));
+
+    listenerUnsubs.push(db.collection("customerPayments").orderBy("date", "desc").limit(1000).onSnapshot((snap) => {
+      customerPayments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderUtangList();
+      renderCartCustomer();
+      renderReceivables();
+      renderDayCard();
+    }, (err) => { console.error(err); }));
+
     listenerUnsubs.push(db.collection("settings").doc("business").onSnapshot((doc) => {
       bizSettings = doc.exists ? Object.assign({ name:"", address:"", tin:"", taxType:"non_vat", accreditation:"" }, doc.data()) : { name:"", address:"", tin:"", taxType:"non_vat", accreditation:"" };
       renderBizSummary();
@@ -4419,6 +5200,8 @@
       renderMarginReport();
       renderPnl();
       renderBreakEven();
+      renderUtangList();
+      renderReceivables();
       renderZoneEconomics();
       renderBuyingView();
     }, (err) => { console.error(err); showToast("Couldn't load sales"); }));
@@ -4767,6 +5550,8 @@
   // here actually call it.
   function matchesProductName(p, q){
     if(!q) return true;
+    // A code nobody can search for is a code nobody uses.
+    if(p && p.sku && String(p.sku).toLowerCase().includes(q)) return true;
     const hay = (p.name + " " + (p.localName || "")).toLowerCase();
     return hay.includes(q);
   }
@@ -4796,7 +5581,7 @@
       card.className = "product-card" + (p.stock <= 0 ? " out" : "");
       const lowClass = p.stock <= (p.threshold || 5) && p.stock > 0 ? " low" : "";
       card.innerHTML = `
-        <div class="thumb">${(p.thumb || p.image) ? `<img src="${p.thumb || p.image}" alt="" loading="lazy">` : productPlaceholder()}</div>
+        <div class="thumb">${(p.thumb || p.image) ? `<img src="${p.thumb || p.image}" alt="" loading="lazy">` : productPlaceholder(p)}</div>
         <div class="name">${escapeHtml(p.name)}</div>
         <div class="price">${peso(p.price)}</div>
         <div class="stock${lowClass}">${p.stock <= 0 ? "Out of stock" : formatStock(p.stock) + " in stock"}</div>
@@ -4985,6 +5770,12 @@
     return scpwdBreakdown(cart).amount;
   }
 
+  function clearCartCustomer(){
+    cartCustomerId = null;
+    if($("cartPayment")) $("cartPayment").value = "cash";
+    renderCartCustomer();
+  }
+
   function cartTotal(){
     return Math.max(0, round2(cartSubtotal() - cartDiscountAmount()));
   }
@@ -5159,6 +5950,15 @@
       amount: bd.amount
     } : null;
     const total = round2(subtotal - (discountRecord ? discountRecord.amount : 0));
+
+    const rawPay = ($("cartPayment") && $("cartPayment").value) || "cash";
+    const payMethod = (rawPay === "gcash" || rawPay === "utang") ? rawPay : "cash";
+    if(payMethod === "utang" && !cartCustomerId){
+      showToast("Pick whose account this goes on");
+      $("checkoutBtn").disabled = cart.length === 0;
+      return;
+    }
+
     let invoiceNumber;
     try{
       invoiceNumber = await getNextInvoiceNumber();
@@ -5175,7 +5975,14 @@
       discount: discountRecord,
       total: total,
       source: "pos",
-      payment: ($("cartPayment") && $("cartPayment").value === "gcash") ? "gcash" : "cash",
+      payment: payMethod,
+      // An utang sale is a sale in every other respect — it counts as revenue,
+      // it takes an invoice number, it moves the stock. What it does NOT do is
+      // put money in the drawer, which is why the day's cash total has to know
+      // about it. Recording it as anything else would manufacture a shortage
+      // every night until someone gave up on counting the drawer at all.
+      customerId: payMethod === "utang" ? cartCustomerId : null,
+      customerName: payMethod === "utang" ? (customerById(cartCustomerId) || {}).name || null : null,
       businessDate: businessDate,
       invoiceNumber: invoiceNumber,
       cashierName: currentUserName || null,
@@ -5202,6 +6009,7 @@
       closeSheet("cartSheet");
       openSheet("receiptSheet");
       cart = [];
+      clearCartCustomer();
       cartDiscount = null;
       if($("cartPayment")) $("cartPayment").value = "cash";
       renderCartBar();
@@ -5291,10 +6099,10 @@
       const row = document.createElement("div");
       row.className = "inv-item";
       row.innerHTML = `
-        <div class="inv-thumb">${(p.thumb || p.image) ? `<img src="${p.thumb || p.image}" alt="" loading="lazy">` : productPlaceholder()}</div>
+        <div class="inv-thumb">${(p.thumb || p.image) ? `<img src="${p.thumb || p.image}" alt="" loading="lazy">` : productPlaceholder(p)}</div>
         <div class="info">
           <div class="name">${escapeHtml(p.name)}</div>
-          <div class="meta">${p.localName ? escapeHtml(p.localName) + " · " : ""}${peso(p.price)} · ${escapeHtml(p.category || "Uncategorized")}${
+          <div class="meta">${p.sku ? escapeHtml(p.sku) + " · " : ""}${p.localName ? escapeHtml(p.localName) + " · " : ""}${peso(p.price)}${p.unit ? " / " + escapeHtml(p.unit) : ""} · ${escapeHtml(p.category || "Uncategorized")}${
             m ? ` · <span class="${marginClass(m)}" style="font-weight:700;">${marginPctText(m)} margin</span>` : ``
           }</div>
         </div>
@@ -5535,6 +6343,40 @@
   function expenseValue(e){ return expenseSign(e) * (Number(e && e.amount) || 0); }
   function isOwnerCash(e){ return e && (e.kind === "ownerDraw" || e.kind === "ownerAdvance"); }
 
+  // What a cost entry did to the physical drawer. Anything not paid from the
+  // till is zero here — including every entry made before this field existed,
+  // which is why the default is "outside": adding it must not retroactively
+  // move the cash on days already closed and signed off.
+  function drawerEffect(e){
+    if(!e || (e.paidFrom || "outside") !== "drawer") return 0;
+    const base = expenseValue(e);              // carries the reversal sign
+    return e.kind === "ownerAdvance" ? base : -base;
+  }
+
+  function drawerMovementsOn(date){
+    return round2(expenses
+      .filter(e => e.date === date)
+      .reduce((t, e) => t + drawerEffect(e), 0));
+  }
+
+  // Split out for the reading, where "paid out" and "put in" are different
+  // lines rather than one net figure that hides both.
+  //
+  // Bucketed by KIND, not by which way the money went. Sorting by sign looks
+  // equivalent and isn't: reversing a ₱300 bill would then appear as ₱300 of
+  // owner money put into the till, which is a different event entirely. A
+  // reversal belongs to the same line as the thing it cancels.
+  function cashPaidOutOn(date){
+    return round2(-expenses
+      .filter(e => e.date === date && e.kind !== "ownerAdvance")
+      .reduce((t, e) => t + drawerEffect(e), 0));
+  }
+  function cashPutInOn(date){
+    return round2(expenses
+      .filter(e => e.date === date && e.kind === "ownerAdvance")
+      .reduce((t, e) => t + drawerEffect(e), 0));
+  }
+
   function monthKeyOf(dateStr){ return String(dateStr || "").slice(0, 7); }
   function thisMonthKey(){ return todayISO().slice(0, 7); }
   function monthLabel(ym){
@@ -5681,6 +6523,634 @@
 
   function salesInMonth(ym){
     return sales.filter(s => monthKeyOf(businessDateOf(s)) === ym);
+  }
+
+  // =====================================================================
+  // THE LISTAHAN — buying on account
+  // =====================================================================
+  //
+  // In a Batad sari-sari store a regular customer buys through the week and
+  // settles on payday. A till that only takes cash at the counter isn't
+  // stricter than the shop next door; it just sends the suki next door.
+  //
+  // Two movements, and they are opposites:
+  //   an UTANG SALE  — goods leave, no money arrives, the balance goes up
+  //   a  COLLECTION  — money arrives with no goods, the balance goes down
+  //
+  // Both have to reach the drawer count correctly or the day will be wrong
+  // every single night, which is how shops stop counting the drawer at all.
+
+  function customerById(id){ return customers.find(c => c.id === id) || null; }
+
+  // A sale carries "payment"; a credit note carries "refundMethod". Asking for
+  // the wrong one on the wrong document is how a return silently stops
+  // reducing what somebody owes.
+  function settlementOf(s){ return isReturnDoc(s) ? s.refundMethod : s.payment; }
+  function isUtangSale(s){ return !!s && settlementOf(s) === "utang" && !!s.customerId; }
+
+  // What one customer owes: everything charged, less everything paid. Returns
+  // are already negative-signed sales, so a returned utang item reduces the
+  // balance without any special handling.
+  function customerBalance(customerId){
+    let charged = 0, paid = 0;
+    sales.forEach(s => {
+      if(s.customerId !== customerId) return;
+      if(settlementOf(s) !== "utang") return;
+      charged += signedTotal(s);
+    });
+    customerPayments.forEach(p => {
+      if(p.customerId !== customerId) return;
+      paid += Number(p.amount) || 0;
+    });
+    return round2(charged - paid);
+  }
+
+  function totalOwedToUs(){
+    return round2(customers.reduce((t, c) => t + Math.max(0, customerBalance(c.id)), 0));
+  }
+
+  // When did this customer last pay anything? A balance that has not moved in
+  // two months is a different problem from a big balance that turns over every
+  // payday, and the list should not make them look alike.
+  function lastPaymentDate(customerId){
+    const mine = customerPayments.filter(p => p.customerId === customerId);
+    if(!mine.length) return null;
+    return mine.map(p => p.date).sort().reverse()[0];
+  }
+
+  function daysSince(dateStr){
+    if(!dateStr) return null;
+    const then = new Date(dateStr + "T00:00:00");
+    if(isNaN(then.getTime())) return null;
+    return Math.floor((Date.now() - then.getTime()) / 86400000);
+  }
+
+  // Collections taken on a given day. These are cash into the drawer that no
+  // sale accounts for.
+  function collectionsForDay(date){
+    return customerPayments.filter(p => p.date === date);
+  }
+  function collectedOn(date, method){
+    return round2(collectionsForDay(date)
+      .filter(p => (method ? (p.method || "cash") === method : true))
+      .reduce((t, p) => t + (Number(p.amount) || 0), 0));
+  }
+
+  // =====================================================================
+  // BULK PHOTO IMPORT
+  // =====================================================================
+  //
+  // Forty products photographed one at a time is forty trips through the
+  // product form. Matched on the filename instead, it is one pick and a wait.
+  //
+  // Matching is deliberately shown before anything is written. A photo on the
+  // wrong product is worse than no photo: it is wrong on the shelf edge, wrong
+  // on the storefront, and nobody notices until a customer does.
+
+  let pendingPhotos = [];   // [{file, base, product|null, skip:bool}]
+  let photoAssignIdx = -1;  // which pending photo the assign panel is on
+
+  // What the filename is trying to say. Two shapes are accepted:
+  //   BAT-0042.webp            — the code straight out
+  //   004_Selecta_Magnum.webp  — a sequence number, then the name
+  // The leading number in the second shape is a file ordering, NOT a SKU, so
+  // it is thrown away rather than matched on. Treating it as a code is how a
+  // photo ends up on the wrong product.
+  function photoNameParts(filename){
+    let base = String(filename || "").replace(/\.[a-z0-9]+$/i, "");
+    const code = base.match(/\b(BAT-\d{3,5})\b/i);
+    base = base.replace(/^\s*\d{1,4}\s*[_\-. ]\s*/, "");
+    return { code: code ? code[1].toUpperCase() : null, name: base.replace(/[_]+/g, " ").trim() };
+  }
+
+  function normaliseForPhoto(t){
+    return String(t || "").toLowerCase()
+      .replace(/['’.]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  }
+
+  // "natures" and "nature" are the same word as far as a filename is concerned.
+  // Short words are left alone so "gas" doesn't become "ga".
+  function photoStem(w){ return w.length > 3 && w.charAt(w.length-1) === "s" ? w.slice(0, -1) : w; }
+  function photoStemAll(t){ return normaliseForPhoto(t).split(" ").filter(Boolean).map(photoStem); }
+
+  // Two spellings of the same name, for comparing a filename against a product.
+  // A filename can't hold a dot or an apostrophe, so "Selecta Supreme 1.25L"
+  // arrives as "Selecta_Supreme_1_25L" and "Today's" as "Today_s". Closing up
+  // every gap makes those identical again — but only if the plural is closed up
+  // BEFORE it is stemmed, which is why both spellings are kept and either one
+  // matching is enough.
+  function photoKeys(t){
+    return [
+      normaliseForPhoto(t).replace(/ /g, ""),   // gaps closed, plurals left alone
+      photoStemAll(t).join("")                  // each word stemmed, then closed up
+    ];
+  }
+  function photoKeysMatch(a, b){
+    const ka = photoKeys(a), kb = photoKeys(b);
+    return !!ka[0] && ka.some(x => kb.indexOf(x) !== -1);
+  }
+
+  function matchPhotoToProduct(filename){
+    const { code, name } = photoNameParts(filename);
+    if(code){
+      const bySku = products.find(p => String(p.sku || "").toUpperCase() === code);
+      if(bySku) return bySku;
+    }
+    const want = normaliseForPhoto(name);
+    if(!want) return null;
+    const exact = products.find(p => normaliseForPhoto(p.name) === want);
+    if(exact) return exact;
+    // Same name give or take a plural — "Natures Spring 1L" is the file,
+    // "Nature Spring 1L" is the product. Still a whole-name match, so it is
+    // only accepted when exactly one product answers to it.
+    const nearly = products.filter(p => photoKeysMatch(name, p.name));
+    if(nearly.length === 1) return nearly[0];
+    // Loose match, but only when exactly one product is a candidate — an
+    // ambiguous filename gets no photo rather than a guessed one.
+    const hits = products.filter(p => {
+      const n = normaliseForPhoto(p.name);
+      return n.includes(want) || want.includes(n);
+    });
+    return hits.length === 1 ? hits[0] : null;
+  }
+
+  // Which products more than one file is claiming. Two files pointing at the
+  // same product would mean the second silently replaces the first, so both
+  // are held back until one of them is reassigned.
+  function photoClashIds(){
+    const seen = {}, clash = {};
+    pendingPhotos.forEach(x => {
+      if(!x.product || x.skip) return;
+      if(seen[x.product.id]) clash[x.product.id] = true;
+      seen[x.product.id] = true;
+    });
+    return clash;
+  }
+
+  function photoIsUsable(x, clash){
+    return !!x.product && !x.skip && !clash[x.product.id];
+  }
+
+  // The next file still wanting a decision: unplaced, or one of a clashing pair.
+  function nextPhotoNeedingAssign(from){
+    const clash = photoClashIds();
+    const start = Math.max(0, from || 0);
+    for(let i = start; i < pendingPhotos.length; i++){
+      const x = pendingPhotos[i];
+      if(x.skip) continue;
+      if(!x.product || clash[x.product.id]) return i;
+    }
+    for(let i = 0; i < start && i < pendingPhotos.length; i++){
+      const x = pendingPhotos[i];
+      if(x.skip) continue;
+      if(!x.product || clash[x.product.id]) return i;
+    }
+    return -1;
+  }
+
+  function renderPhotoAssign(){
+    const panel = $("photoAssignPanel");
+    if(!panel) return;
+    const item = photoAssignIdx >= 0 ? pendingPhotos[photoAssignIdx] : null;
+    if(!item){ panel.style.display = "none"; return; }
+    panel.style.display = "block";
+
+    const clash = photoClashIds();
+    const left = pendingPhotos.filter(x => !x.skip && (!x.product || clash[x.product.id])).length;
+    const taken = item.product && clash[item.product.id];
+    $("photoAssignCount").textContent = taken
+      ? "Two files claim " + item.product.name + " — " + left + " to sort out"
+      : left + " photo" + (left === 1 ? "" : "s") + " to place";
+    $("photoAssignFile").textContent = item.file.name;
+
+    const search = $("photoAssignSearch");
+    const q = normaliseForPhoto(search.value || photoNameParts(item.file.name).name);
+    renderPhotoAssignHits(q);
+  }
+
+  function renderPhotoAssignHits(q){
+    const box = $("photoAssignHits");
+    if(!box) return;
+    // Already-claimed products are still listed but marked, so a genuine
+    // duplicate filename can be redirected without guessing what is free.
+    const clash = photoClashIds();
+    const claimed = {};
+    pendingPhotos.forEach((x, i) => {
+      if(x.product && !x.skip && i !== photoAssignIdx) claimed[x.product.id] = true;
+    });
+    // The search is deliberately looser than the automatic matcher. A wrong
+    // auto-match is silent damage; a wrong search hit is one you can see and
+    // not tap. If every word finds nothing, the last word is dropped and it
+    // tries again, so a filename with an extra word still gets you there.
+    let words = photoStemAll(q);
+    let pool = products.slice();
+    while(words.length){
+      const found = products.filter(p => {
+        const toks = photoStemAll(p.name + " " + (p.sku || ""));
+        return words.every(w => toks.some(t => t.includes(w) || w.includes(t)));
+      });
+      if(found.length){ pool = found; break; }
+      words = words.slice(0, -1);
+      if(!words.length) pool = [];
+    }
+    const hits = pool.slice(0, 8);
+    if(!hits.length){ box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);padding:6px 0;">No product matches that.</div>`; return; }
+    box.innerHTML = hits.map((p, i) => `
+      <button type="button" class="btn btn-secondary photo-hit" data-pid="${escapeHtml(p.id)}"
+        style="width:100%;text-align:left;margin-bottom:6px;font-size:13px;padding:9px 10px;">
+        ${escapeHtml(p.name)}
+        <span style="display:block;font-size:11px;color:var(--text-muted);">${escapeHtml(p.sku || "no code")}${claimed[p.id] ? " · another file already has this one" : ""}${p.image ? " · already has a photo" : ""}</span>
+      </button>`).join("");
+    Array.prototype.forEach.call(box.querySelectorAll(".photo-hit"), b => {
+      b.onclick = () => assignPhotoTo(b.getAttribute("data-pid"));
+    });
+  }
+
+  function assignPhotoTo(pid){
+    const item = pendingPhotos[photoAssignIdx];
+    const p = products.find(x => x.id === pid);
+    if(!item || !p) return;
+    item.product = p;
+    item.skip = false;
+    $("photoAssignSearch").value = "";
+    photoAssignIdx = nextPhotoNeedingAssign(photoAssignIdx + 1);
+    renderPhotoImport();
+  }
+
+  function skipCurrentPhoto(){
+    const item = pendingPhotos[photoAssignIdx];
+    if(item){ item.skip = true; item.product = null; }
+    $("photoAssignSearch").value = "";
+    photoAssignIdx = nextPhotoNeedingAssign(photoAssignIdx + 1);
+    renderPhotoImport();
+  }
+
+  function renderPhotoImport(){
+    const box = $("photoImportPreview");
+    if(!box) return;
+    if(!pendingPhotos.length){
+      box.style.display = "none"; box.innerHTML = "";
+      photoAssignIdx = -1; renderPhotoAssign();
+      return;
+    }
+    box.style.display = "block";
+    renderPhotoAssign();
+
+    const clash = photoClashIds();
+    const usable  = pendingPhotos.filter(x => photoIsUsable(x, clash));
+    const pending = pendingPhotos.filter(x => !x.skip && (!x.product || clash[x.product.id]));
+    const skipped = pendingPhotos.filter(x => x.skip);
+
+    let html = "";
+    if(pending.length){
+      html += `<div class="margin-note">${pending.length} photo${pending.length === 1 ? "" : "s"} still need a product. Use the box above — no renaming required.</div>`;
+    }
+    html += `<div style="font-size:13px;font-weight:700;margin:10px 0 6px;">${usable.length} ready${
+      skipped.length ? `, ${skipped.length} left out` : ""}</div>`;
+    html += `<div style="max-height:240px;overflow-y:auto;">`;
+    pendingPhotos.slice(0, 200).forEach((x, i) => {
+      let right, colour = "";
+      if(x.skip){ right = "left out"; colour = "color:var(--text-muted);"; }
+      else if(!x.product){ right = "not placed"; colour = "color:var(--danger);"; }
+      else if(clash[x.product.id]){ right = x.product.name + " — claimed twice"; colour = "color:var(--danger);"; }
+      else { right = x.product.name + (x.product.image ? " — replaces its photo" : ""); }
+      html += `<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;">
+        <span style="min-width:0;overflow-wrap:anywhere;">${escapeHtml(x.file.name)}</span>
+        <span style="text-align:right;min-width:0;${colour}">${escapeHtml(right)}
+          <button type="button" class="photo-row-fix" data-i="${i}" style="display:block;margin-left:auto;background:none;border:0;padding:2px 0 0;color:var(--primary);font-size:11.5px;text-decoration:underline;">change</button>
+        </span>
+      </div>`;
+    });
+    if(pendingPhotos.length > 200) html += `<div style="font-size:12px;color:var(--text-muted);padding-top:6px;">…and ${pendingPhotos.length - 200} more</div>`;
+    html += `</div>`;
+    if(usable.length){
+      html += `<button type="button" class="btn btn-primary" id="savePhotosBtn" style="margin-top:12px;">Save these ${usable.length} photos</button>`;
+    }
+    box.innerHTML = html;
+
+    Array.prototype.forEach.call(box.querySelectorAll(".photo-row-fix"), b => {
+      b.onclick = () => {
+        photoAssignIdx = Number(b.getAttribute("data-i"));
+        $("photoAssignSearch").value = "";
+        renderPhotoAssign();
+        $("photoAssignPanel").scrollIntoView({ behavior: "smooth", block: "center" });
+      };
+    });
+    const btn = $("savePhotosBtn");
+    if(btn) btn.onclick = () => runPhotoImport(pendingPhotos.filter(x => photoIsUsable(x, photoClashIds())));
+  }
+
+  // Photos that came from somewhere else with no-one's name against them. Not
+  // a scold — a worklist. Each one is a message to a rep away from being fine.
+  function renderPhotoUnverified(){
+    const box = $("photoUnverified");
+    if(!box) return;
+    const open = products.filter(p =>
+      (p.image || p.thumb) &&
+      p.imageSource && p.imageSource !== "own" &&
+      !String(p.imageCredit || "").trim());
+    if(!open.length){ box.style.display = "none"; box.innerHTML = ""; return; }
+    box.style.display = "block";
+    box.innerHTML = `<div class="margin-note">${open.length} photo${open.length === 1 ? "" : "s"} came from outside the shop with no permission recorded: ${
+      escapeHtml(open.slice(0,5).map(p => p.name).join(", "))}${open.length > 5 ? `, and ${open.length - 5} more` : ""}. Until someone's name is against them, they are not photos you can defend.</div>`;
+  }
+
+  async function choosePhotos(fileList){
+    pendingPhotos = Array.from(fileList || [])
+      .filter(f => f.type && f.type.indexOf("image/") === 0)
+      .map(f => ({ file: f, product: matchPhotoToProduct(f.name), skip: false }));
+    photoAssignIdx = nextPhotoNeedingAssign(0);
+    renderPhotoImport();
+    renderPhotoSamples();
+    renderPhotoUnverified();
+  }
+
+  // Two photos, before and against after. Cheap — two files, not fifty — and it
+  // answers the only question that matters before committing the batch: does
+  // the tidying actually make these look better, or is it making a mess?
+  async function renderPhotoSamples(){
+    const box = $("photoSamples");
+    if(!box) return;
+    const tidy = $("photoTidy").checked;
+    const picks = pendingPhotos.slice(0, 2);
+    if(!picks.length || !tidy){ box.style.display = "none"; box.innerHTML = ""; return; }
+    box.style.display = "block";
+    box.innerHTML = `<div style="font-size:12px;color:var(--text-muted);">Checking how the tidy-up looks…</div>`;
+    let html = `<div style="font-size:13px;font-weight:700;margin-bottom:8px;">Before and after</div>`;
+    for(const item of picks){
+      try{
+        const before = await resizeImageFile(item.file, 220, 0.7);
+        const after  = await preparePhotoFile(item.file, true, 220, 0.7);
+        html += `<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
+          <img src="${before}" alt="before" style="width:88px;height:88px;object-fit:contain;background:var(--bg-sunk);border:1px solid var(--border);border-radius:8px;">
+          <span style="color:var(--text-muted);font-size:18px;">&rarr;</span>
+          <img src="${after}" alt="after" style="width:88px;height:88px;object-fit:contain;background:var(--bg-sunk);border:1px solid var(--border);border-radius:8px;">
+          <span style="font-size:11.5px;color:var(--text-muted);min-width:0;overflow-wrap:anywhere;">${escapeHtml(item.file.name)}</span>
+        </div>`;
+      }catch(err){ /* a sample that won't render is not worth stopping for */ }
+    }
+    html += `<p style="font-size:11.5px;color:var(--text-muted);margin:0;">If the after looks worse, untick the box above and the photos go in exactly as they came off the camera.</p>`;
+    box.innerHTML = html;
+  }
+
+  async function runPhotoImport(items){
+    const btn = $("savePhotosBtn");
+    if(!confirm(items.length + " photos will be saved onto those products.\n\nAny product that already had one is replaced.")) return;
+    btn.disabled = true;
+    const source = $("photoSource").value;
+    const permission = ($("photoPermission").value || "").trim();
+    const tidy = $("photoTidy").checked;
+    let done = 0, failed = 0;
+    // One at a time rather than batched: an image is large, and a phone doing
+    // fifty resizes at once will be killed by the browser. Slower, but it
+    // finishes.
+    for(const item of items){
+      try{
+        const image = await preparePhotoFile(item.file, tidy, 640, 0.72);
+        const thumb = await makeThumbFromDataUrl(image, 220, 0.62);
+        await db.collection("products").doc(item.product.id).update({
+          image: image || null,
+          thumb: thumb || null,
+          imageSource: source,
+          imageCredit: source === "own" ? null : (permission || null),
+          imageFile: item.file.name
+        });
+        done++;
+      }catch(err){
+        console.error("photo failed for", item.file.name, err);
+        failed++;
+      }
+      btn.textContent = "Saved " + done + " of " + items.length + "…";
+    }
+    pendingPhotos = [];
+    photoAssignIdx = -1;
+    $("photoFiles").value = "";
+    renderPhotoImport();
+    renderPhotoSamples();
+    renderPhotoUnverified();
+    showToast(failed ? ("Saved " + done + ", " + failed + " failed") : ("Saved " + done + " photos"));
+  }
+
+  // ---------- Rendering: the utang book ----------
+
+  function renderUtangSummary(){
+    const el = $("utangSummary");
+    if(!el) return;
+    const owed = totalOwedToUs();
+    const withBalance = customers.filter(c => customerBalance(c.id) > 0.005).length;
+    const stale = customers.filter(c => {
+      const bal = customerBalance(c.id);
+      const d = daysSince(lastPaymentDate(c.id));
+      return bal > 0.005 && (d === null || d > 60);
+    }).length;
+    el.innerHTML =
+      `<div class="report-row total"><span>Out on the book</span><span>${peso(owed)}</span></div>` +
+      `<div class="report-row"><span>${withBalance} account${withBalance === 1 ? "" : "s"} with a balance</span><span></span></div>` +
+      (stale > 0
+        ? `<div class="report-row" style="color:var(--danger);"><span>${stale} not paid anything in two months</span><span></span></div>`
+        : "");
+  }
+
+  function renderUtangList(){
+    renderUtangSummary();
+    const el = $("utangList");
+    if(!el) return;
+    const q = (($("utangSearch") && $("utangSearch").value) || "").trim().toLowerCase();
+    const rows = customers
+      .filter(c => !q || (c.name || "").toLowerCase().includes(q) || (c.place || "").toLowerCase().includes(q))
+      .map(c => ({ c, bal: customerBalance(c.id), since: daysSince(lastPaymentDate(c.id)) }))
+      // Biggest balance first — that is the order you would want to be reminded
+      // of them in, not alphabetical.
+      .sort((a, b) => b.bal - a.bal);
+
+    if(!rows.length){
+      el.innerHTML = `<p style="font-size:12px;color:var(--text-muted);margin:0;">${
+        customers.length ? "Nobody by that name." : "Nobody on the book yet."
+      }</p>`;
+      return;
+    }
+    el.innerHTML = "";
+    rows.forEach(({ c, bal, since }) => {
+      const over = Number(c.creditLimit) > 0 && bal > Number(c.creditLimit);
+      const row = document.createElement("div");
+      row.className = "report-download-row";
+      row.innerHTML = `
+        <span class="name">${escapeHtml(c.name)}
+          <span style="font-weight:400;color:var(--text-muted);">${
+            c.place ? escapeHtml(c.place) : ""
+          }${since != null && bal > 0.005 ? (c.place ? " · " : "") + "paid " + since + "d ago" : ""}</span>
+        </span>
+        <div class="actions">
+          <b style="margin-right:8px;${over ? "color:var(--danger);" : bal > 0.005 ? "" : "color:var(--text-muted);"}">${peso(bal)}</b>
+          <button type="button">Collect</button>
+        </div>
+      `;
+      row.querySelector("button").onclick = () => openCollectSheet(c.id);
+      el.appendChild(row);
+    });
+  }
+
+  function openUtangSheet(){
+    if($("utangSearch")) $("utangSearch").value = "";
+    renderUtangList();
+    openSheet("utangSheet");
+  }
+
+  let editingCustomerId = null;
+  function openCustomerSheet(id){
+    editingCustomerId = id || null;
+    const c = id ? customerById(id) : null;
+    $("customerSheetTitle").textContent = c ? "Edit " + c.name : "Add to the book";
+    $("cu-name").value = c ? (c.name || "") : "";
+    $("cu-phone").value = c ? (c.phone || "") : "";
+    $("cu-place").value = c ? (c.place || "") : "";
+    $("cu-limit").value = c && Number(c.creditLimit) > 0 ? c.creditLimit : "";
+    openSheet("customerSheet");
+  }
+
+  async function saveCustomer(){
+    const name = $("cu-name").value.trim();
+    if(!name){ showToast("Enter a name"); return; }
+    const limit = parseFloat($("cu-limit").value);
+    const data = {
+      name,
+      phone: $("cu-phone").value.trim() || null,
+      place: $("cu-place").value.trim() || null,
+      creditLimit: isFinite(limit) && limit > 0 ? limit : 0,
+      active: true
+    };
+    try{
+      if(editingCustomerId){
+        await db.collection("customers").doc(editingCustomerId).set(data, { merge: true });
+      } else {
+        data.createdAt = new Date().toISOString();
+        await db.collection("customers").add(data);
+      }
+      closeSheet("customerSheet");
+      showToast("Saved");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't save that");
+    }
+  }
+
+  let collectingId = null;
+  function openCollectSheet(id){
+    collectingId = id;
+    const c = customerById(id);
+    if(!c) return;
+    const bal = customerBalance(id);
+    $("collectTitle").textContent = c.name;
+    const since = daysSince(lastPaymentDate(id));
+    $("collectBalance").className = "margin-readout" + (bal > 0.005 ? "" : " ");
+    $("collectBalance").innerHTML =
+      `<b>${peso(bal)}</b> on the book` +
+      (since != null ? ` · last paid ${since} day${since === 1 ? "" : "s"} ago` : " · never paid yet") +
+      (Number(c.creditLimit) > 0 ? `<br><span style="font-size:11.5px;opacity:.85;">Limit ${peso(c.creditLimit)}</span>` : "");
+    $("co-amount").value = "";
+    $("co-note").value = "";
+    $("co-method").value = "cash";
+    renderCustomerHistory(id);
+    openSheet("collectSheet");
+  }
+
+  function renderCustomerHistory(id){
+    const el = $("customerHistory");
+    if(!el) return;
+    const charges = sales.filter(s => s.customerId === id && s.payment === "utang")
+      .map(s => ({ when: businessDateOf(s), label: docNumberOf(s), amt: signedTotal(s), kind: "charge" }));
+    const paid = customerPayments.filter(p => p.customerId === id)
+      .map(p => ({ when: p.date, label: p.note || ((p.method || "cash") === "gcash" ? "GCash payment" : "Cash payment"), amt: -(Number(p.amount) || 0), kind: "payment" }));
+    const rows = charges.concat(paid).sort((a, b) => String(b.when).localeCompare(String(a.when))).slice(0, 40);
+    if(!rows.length){ el.innerHTML = `<p style="font-size:12px;color:var(--text-muted);margin:0;">Nothing on this account yet.</p>`; return; }
+    el.innerHTML = rows.map(r =>
+      `<div class="report-row"><span>${escapeHtml(r.when || "")} · ${escapeHtml(r.label)}</span>` +
+      `<span style="${r.kind === "payment" ? "color:var(--primary);" : ""}">${r.amt < 0 ? "−" : ""}${peso(Math.abs(r.amt))}</span></div>`
+    ).join("");
+  }
+
+  async function saveCollection(){
+    const amount = parseFloat($("co-amount").value);
+    if(!isFinite(amount) || amount <= 0){ showToast("Enter an amount"); return; }
+    if(!collectingId){ return; }
+    $("saveCollectBtn").disabled = true;
+    try{
+      await db.collection("customerPayments").add({
+        customerId: collectingId,
+        amount: Math.round(amount * 100) / 100,
+        method: $("co-method").value === "gcash" ? "gcash" : "cash",
+        date: todayISO(),
+        note: $("co-note").value.trim() || null,
+        byUid: (auth.currentUser && auth.currentUser.uid) || null,
+        byName: currentUserName || "Owner",
+        timestamp: new Date().toISOString()
+      });
+      closeSheet("collectSheet");
+      showToast("Payment recorded");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't record that");
+    }finally{
+      $("saveCollectBtn").disabled = false;
+    }
+  }
+
+  // The picker in the cart, plus the warning when someone is over their limit.
+  function renderCartCustomer(){
+    const row = $("cartCustomerRow"), sel = $("cartCustomer"), note = $("cartCustomerNote");
+    if(!row || !sel) return;
+    const on = $("cartPayment") && $("cartPayment").value === "utang";
+    row.style.display = on ? "" : "none";
+    if(!on){ cartCustomerId = null; return; }
+
+    const sorted = customers.slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    sel.innerHTML = `<option value="">Whose account?</option>` +
+      sorted.map(c => `<option value="${c.id}"${c.id === cartCustomerId ? " selected" : ""}>${escapeHtml(c.name)}</option>`).join("");
+
+    const c = customerById(cartCustomerId);
+    if(!c){ note.textContent = customers.length ? "" : "Nobody on the book yet — add someone from the 📒 button on the Sell screen."; return; }
+    const bal = customerBalance(c.id);
+    const after = round2(bal + cartTotal());
+    const limit = Number(c.creditLimit) || 0;
+    // Warn, never block. A cashier refusing a neighbour at the counter because
+    // a screen said no costs the shop more than the goods do.
+    if(limit > 0 && after > limit){
+      note.innerHTML = `<b style="color:var(--danger);">Over the limit.</b> ${escapeHtml(c.name)} owes ${peso(bal)}; this sale takes it to ${peso(after)}, past the ${peso(limit)} limit. You can still go ahead.`;
+    } else {
+      note.textContent = c.name + " owes " + peso(bal) + ". After this sale, " + peso(after) + ".";
+    }
+  }
+
+  function renderReceivables(){
+    const el = $("receivablesSummary");
+    if(!el) return;
+    const card = $("receivablesCard"), label = $("receivablesLabel");
+    const show = featureOn("utang") && customers.length > 0;
+    if(card) card.style.display = show ? "" : "none";
+    if(label) label.style.display = show ? "" : "none";
+    if(!show) return;
+
+    const rows = customers
+      .map(c => ({ c, bal: customerBalance(c.id), since: daysSince(lastPaymentDate(c.id)) }))
+      .filter(r => r.bal > 0.005)
+      .sort((a, b) => b.bal - a.bal);
+    const owed = round2(rows.reduce((t, r) => t + r.bal, 0));
+
+    // Money on the book is money you have earned and not yet got. Showing it
+    // beside the day's takings is the point: a good day on the book is not
+    // cash, and a shop can run out of money while its sales look fine.
+    let html = `<div class="report-row total"><span>Out on the book</span><span>${peso(owed)}</span></div>`;
+    rows.slice(0, 5).forEach(r => {
+      const stale = r.since === null || r.since > 60;
+      html += `<div class="report-row"${stale ? ' style="color:var(--danger);"' : ""}><span>${escapeHtml(r.c.name)}${
+        r.since != null ? " · paid " + r.since + "d ago" : " · never paid"
+      }</span><span>${peso(r.bal)}</span></div>`;
+    });
+    if(rows.length > 5) html += `<div class="report-row"><span>and ${rows.length - 5} more</span><span></span></div>`;
+    if(!rows.length) html += `<div class="report-row"><span>Nothing owed — everyone is settled up.</span><span></span></div>`;
+    el.innerHTML = html;
   }
 
   // ---------- What is sitting on the shelves ----------
@@ -6188,8 +7658,14 @@
     $("pf-subUnitsPerPack").value = p && p.subUnitsPerPack ? p.subUnitsPerPack : "";
     $("pf-subUnitPrice").value = p && p.subUnitPrice != null ? p.subUnitPrice : "";
     toggleSubUnitFields();
+    const fp = $("freePhotoPanel");
+    if(fp){ fp.style.display = "none"; $("freePhotoResults").innerHTML = ""; $("freePhotoQuery").value = ""; }
     const lr = $("lookupResult");
     if(lr){ lr.style.display = "none"; lr.innerHTML = ""; }
+    $("pf-sku").value = p && p.sku ? p.sku : "";
+    $("pf-unit").value = p && p.unit ? p.unit : "";
+    $("pf-brand").value = p && p.brand ? p.brand : "";
+    $("pf-size").value = p && p.size ? p.size : "";
     currentImageData = p && p.image ? p.image : null;
     currentThumbData = p && p.thumb ? p.thumb : null;
     currentImageCredit = p && p.imageCredit ? p.imageCredit : null;
@@ -6260,6 +7736,10 @@
       name, localName: localName || null,
       price, stock, category, threshold: isNaN(threshold) ? 5 : threshold,
       supplierId: ($("pf-supplier") && $("pf-supplier").value) || null,
+      sku: $("pf-sku").value.trim() || null,
+      unit: $("pf-unit").value.trim() || null,
+      brand: $("pf-brand").value.trim() || null,
+      size: $("pf-size").value.trim() || null,
       image: currentImageData || null,
       thumb: currentThumbData || null,
       imageCredit: currentImageCredit || null,
@@ -7005,6 +8485,11 @@
         reason,
         restocked: restock,
         refundMethod: method,
+        // Goods bought on the book and brought back: no cash leaves the drawer,
+        // the balance comes down instead. Carrying the customer through onto
+        // the credit note is what lets the balance find it.
+        customerId: (method === "utang" ? (returningSale.customerId || null) : null),
+        customerName: (method === "utang" ? (returningSale.customerName || null) : null),
         note: $("rt-note").value.trim() || null,
         source: returningSale.source === "online" ? "online" : "pos",
         cashierName: currentUserName || null,
@@ -7095,7 +8580,7 @@
   // X-reading and the Z that follows it can never disagree.
   function dayTotals(date){
     const list = salesForDay(date).slice().sort((a, b) => (a.invoiceNumber || 0) - (b.invoiceNumber || 0));
-    let gross = 0, discount = 0, net = 0, cash = 0, gcash = 0, online = 0, returns = 0, returnCount = 0;
+    let gross = 0, discount = 0, net = 0, cash = 0, gcash = 0, online = 0, returns = 0, returnCount = 0, utang = 0;
     list.forEach(s => {
       const sign = saleSign(s);
       const d = sign * ((s.discount && s.discount.amount) || 0);
@@ -7105,10 +8590,26 @@
       discount += d;
       net += t;
       if(isReturnDoc(s)){ returns += raw; returnCount++; }
+      const how = settlementOf(s);
       if(s.source === "online") online += t;
-      else if((isReturnDoc(s) ? s.refundMethod : s.payment) === "gcash") gcash += t;
+      else if(how === "gcash") gcash += t;
+      // On the book: goods moved, money didn't. A refund taken off an account
+      // is the same in reverse. Neither touches the drawer.
+      else if(how === "utang") utang += t;
+      // "Nothing — no money changed hands" means exactly that. Counting it as
+      // cash out would have shown a shortage for a refund that never happened.
+      else if(how === "none") { /* no cash movement */ }
       else cash += t;
     });
+    // Money collected against old accounts. It is cash in the drawer today but
+    // it is NOT today's revenue — those goods were sold and counted on some
+    // earlier day. Adding it to sales would double-count the takings; leaving
+    // it out of the drawer would show a surplus every payday.
+    const collectedCash = collectedOn(date, "cash");
+    const collectedGcash = collectedOn(date, "gcash");
+    // Costs settled out of the till, and owner money put into it.
+    const paidOut = cashPaidOutOn(date);
+    const putIn = cashPutInOn(date);
     const opening = openingFor(date);
     const float = opening ? (Number(opening.float) || 0) : 0;
     return {
@@ -7116,12 +8617,16 @@
       count: list.length,
       gross: round2(gross), discount: round2(discount), net: round2(net),
       cash: round2(cash), gcash: round2(gcash), online: round2(online),
+      utang: round2(utang),
+      collectedCash: collectedCash, collectedGcash: collectedGcash,
+      paidOut: paidOut, putIn: putIn,
       returns: round2(returns), returnCount,
       float: round2(float),
-      // Only counter cash reaches the drawer. GCash never does, and an online
-      // order was settled away from the till, so counting them here would
-      // manufacture a shortage every single night.
-      expectedCash: round2(float + cash),
+      // Only counter cash reaches the drawer. GCash never does, an online order
+      // was settled away from the till, and an utang sale was never paid for —
+      // counting any of them here would manufacture a shortage every night.
+      // Collections are the reverse: cash with no sale behind it today.
+      expectedCash: round2(float + cash + collectedCash - paidOut + putIn),
       invFrom: list.length ? list[0].invoiceNumber : null,
       invTo: list.length ? list[list.length - 1].invoiceNumber : null
     };
@@ -7158,6 +8663,12 @@
     // What each customer spent, on average. A day can hold its takings up
     // while quietly serving half as many people spending twice as much — or
     // the reverse — and the total alone never shows it.
+    if(t.utang > 0) html += `<div class="report-row"><span>of which on the book</span><span>${peso(t.utang)}</span></div>`;
+    if(t.collectedCash > 0 || t.collectedGcash > 0){
+      html += `<div class="report-row"><span>Collected on old accounts</span><span>${peso(t.collectedCash + t.collectedGcash)}</span></div>`;
+    }
+    if(t.paidOut > 0) html += `<div class="report-row"><span>Paid out of the drawer</span><span>−${peso(t.paidOut)}</span></div>`;
+    if(t.putIn > 0) html += `<div class="report-row"><span>Owner put into the drawer</span><span>${peso(t.putIn)}</span></div>`;
     const atvToday = averageTransaction(sales.filter(s => businessDateOf(s) === date));
     if(atvToday != null){
       html += `<div class="report-row"><span>Average per customer</span><span>${peso(atvToday)}</span></div>`;
@@ -7353,10 +8864,17 @@
     L.push("Counter cash        " + peso(t.cash).padStart(12, " "));
     L.push("GCash               " + peso(t.gcash).padStart(12, " "));
     L.push("Online orders       " + peso(t.online).padStart(12, " "));
+    if(t.utang > 0) L.push("On the book         " + peso(t.utang).padStart(12, " "));
     L.push("--------------------------------");
     const float = z ? (Number(z.openingFloat) || 0) : t.float;
     const expected = z ? Number(z.expectedCash) : t.expectedCash;
+    // Every movement in and out of the drawer, listed. A single "should hold"
+    // figure is only checkable if the lines that built it are on the paper.
     L.push("Opening float       " + peso(float).padStart(12, " "));
+    L.push("+ Counter cash      " + peso(t.cash).padStart(12, " "));
+    if(t.collectedCash > 0) L.push("+ Collected on book " + peso(t.collectedCash).padStart(12, " "));
+    if(t.putIn > 0)         L.push("+ Owner put in      " + peso(t.putIn).padStart(12, " "));
+    if(t.paidOut > 0)       L.push("- Paid from drawer  " + peso(t.paidOut).padStart(12, " "));
     L.push("Drawer should hold  " + peso(expected).padStart(12, " "));
     if(isZ && z){
       L.push("Drawer counted      " + peso(Number(z.countedCash)).padStart(12, " "));
@@ -8526,6 +10044,7 @@
   }
 
   async function renderReportsView(){
+    renderPhotoUnverified();
     $("reportQLabel").textContent = "Q" + reportQuarter.q + " " + reportQuarter.year;
     $("taxReportCard").textContent = "Loading…";
     await loadReportSales();
@@ -8784,6 +10303,9 @@
     // Only an owner may create a product, so a manager on the Inventory tab
     // gets no "+" button. They reach the same rows to count and correct stock;
     // what they can't do is invent an item or change its price.
+    // Everyone who can sell can reach the book: staff charge to it and take
+    // payments against it at the counter.
+    $("utangFab").style.display = (view === "sell" && featureOn("utang")) ? "flex" : "none";
     $("addProductFab").style.display =
       (view === "inventory" && currentUserRole === "owner") ? "flex" : "none";
     if(view === "sell") renderCartBar();
@@ -10050,7 +11572,7 @@
     $("searchInput").oninput = renderProductGrid;
     $("invSearchInput").oninput = renderInventory;
     $("cartBar").onclick = () => { renderCartSheet(); openSheet("cartSheet"); };
-    $("clearCartBtn").onclick = () => { cart = []; renderCartSheet(); renderCartBar(); renderProductGrid(); };
+    $("clearCartBtn").onclick = () => { cart = []; clearCartCustomer(); renderCartSheet(); renderCartBar(); renderProductGrid(); };
     $("checkoutBtn").onclick = completeSale;
     $("doneReceiptBtn").onclick = () => closeSheet("receiptSheet");
     $("printReceiptBtn").onclick = () => {
@@ -10080,7 +11602,9 @@
       e.target.value = "";
       if(!file) return;
       try{
-        currentImageData = await resizeImageFile(file, 640, 0.72);
+        // Same tidy-up the bulk importer does. A photo taken at the counter
+        // gets the colour cast and the framing sorted out on the way in.
+        currentImageData = await preparePhotoFile(file, true, 640, 0.72);
         currentThumbData = await makeThumbFromDataUrl(currentImageData, 220, 0.62);
         currentImageCredit = null; // their own photo needs no attribution
         updatePhotoPreview();
@@ -10092,6 +11616,9 @@
     $("pf-photo-input").onchange = handleProductPhoto;
     $("pf-photo-camera").onchange = handleProductPhoto;
     $("takePhotoBtn").onclick = () => $("pf-photo-camera").click();
+    $("findFreePhotoBtn").onclick = () => openFreePhotoPanel();
+    $("freePhotoSearchBtn").onclick = () => searchFreePhotos();
+    $("freePhotoQuery").onkeydown = (e) => { if(e.key === "Enter"){ e.preventDefault(); searchFreePhotos(); } };
     $("removePhotoBtn").onclick = () => { currentImageData = null; currentThumbData = null; currentImageCredit = null; updatePhotoPreview(); };
     ["pf-price","pf-cost","pf-opcost","pf-markup","pf-competitor"].forEach(id => { $(id).oninput = updatePricingHelper; });
     $("pf-hasSubUnit").onchange = toggleSubUnitFields;
@@ -10128,9 +11655,17 @@
       if(el){ el.addEventListener("input", renderPricingPreview); el.addEventListener("change", renderPricingPreview); }
     });
     $("savePricingBtn").onclick = savePricingSettings;
+    $("utangFab").onclick = openUtangSheet;
+    $("addCustomerBtn").onclick = () => openCustomerSheet(null);
+    $("saveCustomerBtn").onclick = saveCustomer;
+    $("saveCollectBtn").onclick = saveCollection;
+    $("utangSearch").addEventListener("input", renderUtangList);
+    $("cartPayment").addEventListener("change", renderCartCustomer);
+    $("cartCustomer").addEventListener("change", (e) => { cartCustomerId = e.target.value || null; renderCartCustomer(); });
     $("addExpenseBtn").onclick = () => openExpenseSheet(false);
     $("addOwnerCashBtn").onclick = () => openExpenseSheet(true);
     $("saveExpenseBtn").onclick = saveExpense;
+    $("ex-kind").onchange = updatePaidFromWording;
     $("pnlMonthSelect").onchange = (e) => { pnlMonth = e.target.value; renderPnl(); };
     $("addPairingRuleBtn").onclick = addPairingRule;
     $("editDesignBtn").onclick = openStoreDesignSheet;
@@ -10147,6 +11682,11 @@
     $("dlManifestPos").onclick = () => downloadManifest("pos");
     $("dlManifestStore").onclick = () => downloadManifest("store");
     $("importPreviewBtn").onclick = previewImport;
+    $("pickPhotosBtn").onclick = () => $("photoFiles").click();
+    $("photoFiles").onchange = (e) => choosePhotos(e.target.files);
+    $("photoAssignSearch").oninput = (e) => renderPhotoAssignHits(normaliseForPhoto(e.target.value));
+    $("photoAssignSkip").onclick = () => skipCurrentPhoto();
+    $("photoTidy").onchange = () => renderPhotoSamples();
     $("importFileBtn").onclick = () => $("importFile").click();
     $("importFile").onchange = (e) => {
       const file = e.target.files && e.target.files[0];
@@ -10292,7 +11832,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v57";
+  const APP_VERSION = "v67";
 
   function init(){
     applyRememberedDesign();
