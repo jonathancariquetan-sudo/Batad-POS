@@ -1019,6 +1019,16 @@
       </div>
       <input type="file" accept="image/*" multiple id="photoFiles" style="display:none;">
       <button type="button" class="btn btn-secondary" id="pickPhotosBtn">Choose photos</button>
+
+      <!-- Searches the open product databases for every product that has no
+           stored photo yet, downloads the actual file, and queues it for the
+           owner to approve. The batch uploader above is untouched. -->
+      <input type="file" accept="image/*" id="finderOneFile" style="display:none;">
+      <input type="file" accept="image/*" capture="environment" id="finderOneCamera" style="display:none;">
+      <button type="button" class="btn btn-primary" id="finderBtn" style="margin-top:8px;">🔎 Find &amp; download product photos</button>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Looks up each product by its barcode across the four open product databases, then by its full name and size. Nothing is saved until you have seen it. Expect a lot of &ldquo;no verified image found&rdquo; &mdash; most sari-sari lines are in no open database, and an honest blank beats a picture of the wrong thing.</p>
+      <div id="finderStorageNote" style="display:none;"></div>
+      <div id="finderResults" style="display:none;margin-top:12px;"></div>
       <div id="photoSamples" style="display:none;margin-top:12px;"></div>
 
       <!-- The assignment panel. One file at a time, with a type-to-filter list
@@ -1383,6 +1393,7 @@
           <button type="button" class="btn btn-danger" id="removePhotoBtn" style="display:none;">Remove photo</button>
         </div>
       </div>
+      <div id="productImageSource" style="display:none;margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-sunk);font-size:11.5px;line-height:1.6;"></div>
       <div id="freePhotoPanel" style="display:none;margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-sunk);">
         <div style="display:flex;gap:8px;">
           <input type="text" id="freePhotoQuery" placeholder="What is it? e.g. toothbrush" autocomplete="off" style="flex:1;">
@@ -2345,6 +2356,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-storage-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
 <script src="firebase-config.js"></script>
 <script>
@@ -2366,6 +2378,10 @@
   let currentImageData = null; // data URL for the product form's photo, or null
   let currentThumbData = null; // small listing copy of the same photo
   let currentImageCredit = null; // attribution when the photo came from a licensed source
+  // The full image record (source, licence, storage paths). Held separately from
+  // the picture being previewed: the preview needs something an <img> can show,
+  // and the record must survive an edit that doesn't touch the photo.
+  let currentImageMeta = null;
   let scanMode = "cart"; // "cart" | "field" — what a successful scan should do
   let zxingReader = null;
   let lastReceiptSale = null;
@@ -2383,7 +2399,7 @@
   let currentLogoData = null; // data URL for the store-design form's logo, or null
   let pairingRules = []; // [{from: category, to: category}] — storefront cross-sell rules
 
-  let db = null, auth = null;
+  let db = null, auth = null, storage = null;
   let listenerUnsubs = [];
   let ownerListenerUnsubs = [];
   let managerListenerUnsubs = [];
@@ -2882,6 +2898,549 @@
     }
   }
 
+
+  // ---------- The product image finder ----------
+  // What this does NOT do: search Google or Bing. A picture appearing in a
+  // search result carries no licence, and "it was on the internet" has never
+  // been a defence. Every source here states its licence up front, and the
+  // licence travels with the picture onto the product record.
+  //
+  // Order of attack, per product:
+  //   1. the barcode, against all four Open*Facts databases at once
+  //   2. the full product identity as a phrase, against Openverse
+  // Anything that can't be matched confidently is reported as not found
+  // rather than filled with something that looks approximately right.
+
+  const OFF_ALL_ENDPOINT = "https://world.openfoodfacts.org/api/v3/product/";
+  const IMAGE_MASTER_DIM = 1000;
+  const IMAGE_THUMB_DIM  = 400;
+
+  // "Silver Swan Soy Sauce 1L Pouch" + brand + size, deduplicated so the brand
+  // isn't repeated when it is already the first word of the name. Philippines
+  // is appended because these are local variants: a US "Del Monte" tin is a
+  // different package from the one on the shelf in Batad.
+  function productSearchQuery(p){
+    const parts = [];
+    const seen = {};
+    const push = (t) => String(t || "").split(/\s+/).forEach(w => {
+      const k = w.toLowerCase().replace(/[^a-z0-9.]/g, "");
+      if(!k || seen[k]) return;
+      seen[k] = true; parts.push(w);
+    });
+    push(p.brand && !/^(generic|local)$/i.test(p.brand) ? p.brand : "");
+    push(p.name);
+    push(p.size);
+    parts.push("Philippines");
+    return parts.join(" ").trim();
+  }
+
+  // Does this candidate actually depict the product, or merely something
+  // similar? Brand and size are what separate "Silver Swan Soy Sauce 1L" from
+  // "Silver Swan Soy Sauce 200ml", and getting that wrong puts the wrong
+  // bottle on the shelf label.
+  function scoreCandidate(product, cand){
+    const reasons = [];
+    const pn = photoStemAll(product.name).join(" ");
+    const cn = photoStemAll([cand.brand, cand.title].filter(Boolean).join(" ")).join(" ");
+    const brand = String(product.brand || "").trim();
+    const wantBrand = brand && !/^(generic|local)$/i.test(brand);
+
+    let brandOk = null;
+    if(wantBrand){
+      brandOk = normaliseForPhoto(cand.brand || cand.title || "").includes(normaliseForPhoto(brand));
+      reasons.push(brandOk ? "brand matches" : "brand not confirmed");
+    }
+    // Size is compared by its number and unit, so "1L" and "1 l" agree and
+    // "1L" and "200ml" do not.
+    const sizeOf = (t) => {
+      const m = String(t || "").toLowerCase().match(/(\d+(?:\.\d+)?)\s*(ml|l|g|kg|oz)\b/);
+      return m ? { n: parseFloat(m[1]), u: m[2] } : null;
+    };
+    const ps = sizeOf(product.size) || sizeOf(product.name);
+    const cs = sizeOf(cand.quantity) || sizeOf(cand.title);
+    let sizeOk = null;
+    if(ps && cs){
+      const norm = (s) => s.u === "l" ? s.n * 1000 : s.u === "kg" ? s.n * 1000 : s.n;
+      sizeOk = Math.abs(norm(ps) - norm(cs)) < 0.5 &&
+        ((ps.u === "l" || ps.u === "ml") === (cs.u === "l" || cs.u === "ml"));
+      reasons.push(sizeOk ? "size matches" : "size differs (" + (cand.quantity || "?") + ")");
+    } else if(ps){ reasons.push("size not stated on the record"); }
+
+    const words = pn.split(" ").filter(w => w.length > 2);
+    const hit = words.filter(w => cn.includes(w)).length;
+    const nameShare = words.length ? hit / words.length : 0;
+    reasons.push(Math.round(nameShare * 100) + "% of the name matches");
+
+    let level = "weak";
+    if(cand.byBarcode && brandOk !== false && sizeOk !== false) level = "strong";
+    else if(brandOk && sizeOk) level = "strong";
+    else if((brandOk || nameShare >= 0.6) && sizeOk !== false) level = "partial";
+    return { level, reasons, nameShare };
+  }
+
+  // One call covers Open Food Facts, Open Beauty Facts, Open Pet Food Facts and
+  // Open Products Facts — product_type=all redirects to whichever holds it, so
+  // soap and bleach are looked up the same way as a tin of corned beef.
+  async function lookupByBarcodeAll(code){
+    const url = OFF_ALL_ENDPOINT + encodeURIComponent(code) + "?product_type=all"
+      + "&fields=product_name,brands,quantity,image_front_url,product_type,code";
+    const res = await fetch(url, { headers: { "Accept": "application/json" } });
+    if(!res.ok) return null;
+    const data = await res.json();
+    const pr = (data && (data.product || (data.products && data.products[0]))) || null;
+    if(!pr || !pr.image_front_url) return null;
+    const domain = {
+      food: "openfoodfacts.org", beauty: "openbeautyfacts.org",
+      petfood: "openpetfoodfacts.org", product: "openproductsfacts.org"
+    }[pr.product_type] || "openfoodfacts.org";
+    return {
+      byBarcode: true,
+      title: pr.product_name || "",
+      brand: (pr.brands || "").split(",")[0].trim(),
+      quantity: pr.quantity || "",
+      imageUrl: pr.image_front_url,
+      thumbUrl: pr.image_front_url,
+      sourceProvider: "Open" + (pr.product_type === "beauty" ? " Beauty" : pr.product_type === "product" ? " Products" : pr.product_type === "petfood" ? " Pet Food" : " Food") + " Facts",
+      sourceUrl: "https://world." + domain + "/product/" + (pr.code || code),
+      license: "CC BY-SA 3.0",
+      licenseStatus: "open"
+    };
+  }
+
+  async function searchOpenverseFor(query, limit){
+    const url = OPENVERSE_ENDPOINT + "?q=" + encodeURIComponent(query)
+      + "&license_type=commercial&page_size=" + (limit || 6) + "&mature=false";
+    const res = await fetch(url, { headers: { "Accept": "application/json" } });
+    if(res.status === 429) throw new Error("rate-limited");
+    if(!res.ok) return [];
+    const data = await res.json();
+    return ((data && data.results) || []).map(h => ({
+      byBarcode: false,
+      id: h.id,
+      title: h.title || "",
+      brand: "",
+      quantity: "",
+      imageUrl: h.url,
+      thumbUrl: h.thumbnail || h.url,
+      sourceProvider: "Openverse" + (h.source ? " · " + h.source : ""),
+      sourceUrl: h.foreign_landing_url || h.url,
+      license: (String(h.license || "").toUpperCase() + " " + (h.license_version || "")).trim(),
+      licenseStatus: "open",
+      creator: h.creator || ""
+    }));
+  }
+
+  // Everything a product might be matched against, best first.
+  async function findImageCandidates(product){
+    const out = [];
+    if(product.barcode){
+      try{
+        const hit = await lookupByBarcodeAll(String(product.barcode).trim());
+        if(hit) out.push(hit);
+      }catch(e){ console.warn("barcode lookup failed", e); }
+    }
+    if(out.length < 5){
+      try{
+        const hits = await searchOpenverseFor(productSearchQuery(product), 6);
+        hits.forEach(h => out.push(h));
+      }catch(e){ if(String(e.message) === "rate-limited") throw e; console.warn("openverse failed", e); }
+    }
+    return out.map(c => Object.assign(c, { match: scoreCandidate(product, c) }))
+      .filter(c => c.match.level !== "weak" || c.byBarcode)
+      .sort((a, b) => (a.match.level === "strong" ? -1 : 1) - (b.match.level === "strong" ? -1 : 1))
+      .slice(0, 5);
+  }
+
+  // ---------- Turning a found picture into files we own ----------
+  // The requirement is that the file is actually downloaded, not that a link is
+  // remembered. A remembered link is somebody else's server deciding whether
+  // your shop has pictures today.
+  function canvasToBlob(canvas, type, quality){
+    return new Promise((resolve) => {
+      if(canvas.toBlob) canvas.toBlob(b => resolve(b), type, quality);
+      else resolve(null);
+    });
+  }
+
+  function supportsWebP(){
+    try{
+      const c = document.createElement("canvas");
+      c.width = c.height = 1;
+      return c.toDataURL("image/webp").indexOf("image/webp") === 5;
+    }catch(e){ return false; }
+  }
+
+  // Master and thumbnail, both square, both WebP where the browser can manage
+  // it and JPEG where it can't. Returns blobs, not data URLs — a blob is what
+  // gets uploaded.
+  async function buildImageFiles(sourceDataUrl){
+    const type = supportsWebP() ? "image/webp" : "image/jpeg";
+    const ext  = type === "image/webp" ? "webp" : "jpg";
+    const make = (dim, q) => new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = async () => {
+        const c = document.createElement("canvas");
+        c.width = c.height = dim;
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, dim, dim);
+        const s = Math.min(dim / img.width, dim / img.height);
+        const w = Math.round(img.width * s), h = Math.round(img.height * s);
+        ctx.drawImage(img, Math.round((dim - w) / 2), Math.round((dim - h) / 2), w, h);
+        const blob = await canvasToBlob(c, type, q);
+        blob ? resolve({ blob, dataUrl: c.toDataURL(type, q) }) : reject(new Error("encode failed"));
+      };
+      img.onerror = () => reject(new Error("decode failed"));
+      img.src = sourceDataUrl;
+    });
+    const master = await make(IMAGE_MASTER_DIM, 0.82);
+    const thumb  = await make(IMAGE_THUMB_DIM, 0.72);
+    return { master, thumb, ext, type };
+  }
+
+  // Uploads and returns the download URL, or null when Storage isn't set up —
+  // in which case the caller keeps the picture in the product record as before.
+  async function uploadImageBlob(blob, path){
+    if(!storage) return null;
+    const ref = storage.ref().child(path);
+    const snap = await ref.put(blob, { cacheControl: "public,max-age=31536000" });
+    return await snap.ref.getDownloadURL();
+  }
+
+  // The one test that decides whether a product counts as having a photo.
+  // A filename is not a photo. An empty object is not a photo. A link to
+  // somebody else's website is not a photo.
+  function hasStoredPhoto(p){
+    if(!p) return false;
+    const im = p.image;
+    if(im && typeof im === "object"){
+      if(im.storagePath && im.storageUrl) return true;
+      const inline = im.inlineThumb || im.inlineImage;
+      if(typeof inline === "string" && inline.indexOf("data:image/") === 0) return true;
+      return false;
+    }
+    // Photos stored the old way, straight onto the record as data.
+    return typeof p.image === "string" && p.image.indexOf("data:image/") === 0;
+  }
+
+  function photoDisplaySrc(p){
+    if(!p) return "";
+    const im = p.image;
+    if(im && typeof im === "object") return im.thumbnailUrl || im.storageUrl || im.inlineThumb || im.inlineImage || "";
+    return p.thumb || (typeof p.image === "string" ? p.image : "");
+  }
+
+
+
+  // What the shop knows about where this product's picture came from. Shown in
+  // the editor because a provenance record nobody ever looks at is a record
+  // that quietly goes wrong.
+  function renderProductImageSource(p){
+    const box = document.getElementById("productImageSource");
+    if(!box) return;
+    const im = p && p.image;
+    if(!im || typeof im !== "object"){
+      if(p && hasStoredPhoto(p)){
+        box.style.display = "block";
+        box.innerHTML = `<b>Photo source</b><br>Saved before the shop started keeping source records. Replace it to record where it came from.`;
+        return;
+      }
+      box.style.display = "none"; box.innerHTML = ""; return;
+    }
+    box.style.display = "block";
+    const stored = im.storagePath && im.storageUrl;
+    const licLine = im.licenseVerified
+      ? `<span style="color:var(--primary);font-weight:600;">${escapeHtml(im.license || "open licence")}</span> — free to use`
+      : `<span style="color:var(--danger);font-weight:600;">${escapeHtml(im.license || "licence not established")}</span> — permission still to confirm`;
+    box.innerHTML = `<b>Product image source</b><br>
+      Source: ${escapeHtml(im.sourceProvider || "not recorded")}
+      ${im.sourceUrl ? ` · <a href="${escapeHtml(im.sourceUrl)}" target="_blank" rel="noopener" style="color:var(--primary);">view it</a>` : ""}<br>
+      Licence: ${licLine}<br>
+      File: ${escapeHtml(im.filename || "—")}<br>
+      Stored: ${stored
+        ? `<span style="color:var(--primary);font-weight:600;">in Firebase Storage</span>`
+        : (im.inlineImage ? "on the product record (Storage is not switched on)" : `<span style="color:var(--danger);font-weight:600;">not stored — this product does not count as having a photo</span>`)}
+      ${im.retrievedAt ? `<br>Retrieved: ${escapeHtml(String(im.retrievedAt).slice(0,10))}` : ""}`;
+  }
+
+  // ---------- Find & download, across the whole catalogue ----------
+  // Runs one product at a time on purpose. These are public databases run on
+  // donations; hammering them with two hundred parallel requests is both rude
+  // and the fastest way to get the shop's address blocked.
+  let finderQueue = [];       // [{product, candidates, chosen, status}]
+  let finderRunning = false;
+  let finderStop = false;
+  const FINDER_GAP_MS = 900;
+
+  function finderTally(){
+    const t = { found: 0, needsPermission: 0, none: 0, downloaded: 0 };
+    finderQueue.forEach(r => {
+      if(r.status === "downloaded") t.downloaded++;
+      else if(r.status === "none") t.none++;
+      else if(r.chosen && r.chosen.match.level === "strong") t.found++;
+      else if(r.candidates && r.candidates.length) t.needsPermission++;
+      else t.none++;
+    });
+    return t;
+  }
+
+  function renderFinderStorageNote(){
+    const el = document.getElementById("finderStorageNote");
+    if(!el) return;
+    if(storage){ el.style.display = "none"; el.innerHTML = ""; return; }
+    el.style.display = "block";
+    el.innerHTML = `<div class="margin-note">Firebase Storage isn't switched on for this shop yet, so downloaded photos will be kept on the product record instead. That works, but every customer then downloads every picture. Turn Storage on in the Firebase console and publish the storage rules to fix it.</div>`;
+  }
+
+  async function runImageFinder(){
+    renderFinderStorageNote();
+    if(finderRunning){ finderStop = true; return; }
+    const targets = products.filter(p => !hasStoredPhoto(p));
+    if(!targets.length){ showToast("Every product already has a stored photo"); return; }
+    finderQueue = [];
+    finderRunning = true; finderStop = false;
+    $("finderBtn").textContent = "Stop searching";
+    for(let i = 0; i < targets.length; i++){
+      if(finderStop) break;
+      const p = targets[i];
+      const row = { product: p, candidates: [], chosen: null, status: "searching" };
+      finderQueue.push(row);
+      renderFinderQueue(i + 1, targets.length);
+      try{
+        const cands = await findImageCandidates(p);
+        row.candidates = cands;
+        row.chosen = cands.find(c => c.match.level === "strong") || null;
+        row.status = cands.length ? "found" : "none";
+      }catch(err){
+        if(String(err.message) === "rate-limited"){
+          row.status = "none";
+          showToast("Search limit reached — stopping here, try again in a minute");
+          break;
+        }
+        row.status = "none";
+      }
+      renderFinderQueue(i + 1, targets.length);
+      await new Promise(r => setTimeout(r, FINDER_GAP_MS));
+    }
+    finderRunning = false;
+    $("finderBtn").textContent = "🔎 Find & download product photos";
+    renderFinderQueue();
+  }
+
+  function renderFinderQueue(done, total){
+    const box = $("finderResults");
+    if(!box) return;
+    if(!finderQueue.length){ box.style.display = "none"; box.innerHTML = ""; return; }
+    box.style.display = "block";
+    const t = finderTally();
+    let html = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+      ${finderChip("Downloaded", t.downloaded)}
+      ${finderChip("Verified match", t.found)}
+      ${finderChip("Needs checking", t.needsPermission)}
+      ${finderChip("No image found", t.none)}
+    </div>`;
+    if(finderRunning && total){
+      html += `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Searching ${done} of ${total}…</div>`;
+    }
+    html += `<div style="max-height:420px;overflow-y:auto;">`;
+    finderQueue.forEach((r, i) => {
+      const nm = escapeHtml(r.product.name);
+      const sku = escapeHtml(r.product.sku || "");
+      if(r.status === "searching"){
+        html += `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px;color:var(--text-muted);">${nm} — searching…</div>`;
+        return;
+      }
+      if(r.status === "downloaded"){
+        html += `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px;">✓ ${nm} <span style="color:var(--text-muted);">— saved as ${sku || "photo"}.webp</span></div>`;
+        return;
+      }
+      if(!r.candidates.length){
+        html += `<div style="padding:9px 0;border-bottom:1px solid var(--border);">
+          <div style="font-size:12.5px;font-weight:600;">${nm}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin:3px 0 6px;">No verified image found.</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary finder-again" data-i="${i}" style="font-size:11.5px;padding:5px 9px;">Search again</button>
+            <button type="button" class="btn btn-secondary finder-gallery" data-i="${i}" style="font-size:11.5px;padding:5px 9px;">Upload photo</button>
+            <button type="button" class="btn btn-secondary finder-camera" data-i="${i}" style="font-size:11.5px;padding:5px 9px;">Take photo</button>
+          </div></div>`;
+        return;
+      }
+      html += `<div style="padding:9px 0;border-bottom:1px solid var(--border);">
+        <div style="font-size:12.5px;font-weight:600;">${nm}</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px;">`;
+      r.candidates.forEach((c, j) => {
+        const lvl = c.match.level;
+        const colour = lvl === "strong" ? "var(--primary)" : "var(--text-muted)";
+        html += `<button type="button" class="finder-pick" data-i="${i}" data-j="${j}"
+          style="padding:0;border:2px solid ${c === r.chosen ? "var(--primary)" : "var(--border)"};border-radius:8px;background:var(--surface);overflow:hidden;text-align:left;cursor:pointer;">
+          <img src="${escapeHtml(c.thumbUrl || "")}" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:contain;background:#fff;display:block;">
+          <span style="display:block;font-size:9px;line-height:1.35;padding:4px 5px;color:${colour};">
+            <b>${lvl === "strong" ? "matches" : "check it"}</b><br>${escapeHtml(c.sourceProvider.slice(0,22))}<br>${escapeHtml(c.license || "")}
+          </span></button>`;
+      });
+      html += `</div>`;
+      if(r.chosen){
+        html += `<div style="font-size:11px;color:var(--text-muted);margin-top:5px;">${escapeHtml(r.chosen.match.reasons.join(" · "))}
+          &middot; <a href="${escapeHtml(r.chosen.sourceUrl || "#")}" target="_blank" rel="noopener" style="color:var(--primary);">see the source</a></div>
+        <button type="button" class="btn btn-primary finder-save" data-i="${i}" style="margin-top:7px;font-size:12px;padding:7px 11px;">Download &amp; save this one</button>`;
+      }
+      html += `</div>`;
+    });
+    html += `</div>`;
+    const ready = finderQueue.filter(r => r.chosen && r.status !== "downloaded").length;
+    if(ready > 1 && !finderRunning){
+      html += `<button type="button" class="btn btn-primary" id="finderSaveAll" style="margin-top:12px;">Download &amp; save all ${ready} confirmed matches</button>`;
+    }
+    box.innerHTML = html;
+    bindFinderButtons(box);
+  }
+
+  function finderChip(label, n){
+    return `<span style="font-size:11.5px;padding:4px 9px;border-radius:999px;background:var(--primary-tint);color:var(--primary);font-weight:600;">${label}: ${n}</span>`;
+  }
+
+  function bindFinderButtons(box){
+    const each = (sel, fn) => Array.prototype.forEach.call(box.querySelectorAll(sel), fn);
+    each(".finder-pick", b => b.onclick = () => {
+      const r = finderQueue[Number(b.getAttribute("data-i"))];
+      r.chosen = r.candidates[Number(b.getAttribute("data-j"))];
+      renderFinderQueue();
+    });
+    each(".finder-save", b => b.onclick = () => saveFinderRow(finderQueue[Number(b.getAttribute("data-i"))], b));
+    each(".finder-again", b => b.onclick = async () => {
+      const r = finderQueue[Number(b.getAttribute("data-i"))];
+      r.status = "searching"; renderFinderQueue();
+      try{ r.candidates = await findImageCandidates(r.product); }catch(e){ r.candidates = []; }
+      r.chosen = r.candidates.find(c => c.match.level === "strong") || null;
+      r.status = r.candidates.length ? "found" : "none";
+      renderFinderQueue();
+    });
+    each(".finder-gallery", b => b.onclick = () => { finderTargetId = finderQueue[Number(b.getAttribute("data-i"))].product.id; $("finderOneFile").click(); });
+    each(".finder-camera", b => b.onclick = () => { finderTargetId = finderQueue[Number(b.getAttribute("data-i"))].product.id; $("finderOneCamera").click(); });
+    const all = $("finderSaveAll");
+    if(all) all.onclick = async () => {
+      all.disabled = true;
+      const rows = finderQueue.filter(r => r.chosen && r.status !== "downloaded");
+      for(let i = 0; i < rows.length; i++){
+        all.textContent = "Saving " + (i + 1) + " of " + rows.length + "…";
+        await saveFinderRow(rows[i], null);
+      }
+      renderFinderQueue();
+    };
+  }
+
+  let finderTargetId = null;
+
+  // Download, convert, upload, record. Every step has to succeed before the
+  // product is counted as having a photo — a half-finished save is the thing
+  // that makes a count lie.
+  async function saveFinderRow(row, btn){
+    if(!row || !row.chosen) return;
+    const c = row.chosen;
+    if(btn){ btn.disabled = true; btn.textContent = "Downloading…"; }
+    try{
+      let dataUrl = null;
+      const tries = [];
+      if(!c.byBarcode && c.id) tries.push(OPENVERSE_ENDPOINT + encodeURIComponent(c.id) + "/thumb/");
+      if(c.imageUrl) tries.push(c.imageUrl);
+      if(c.thumbUrl) tries.push(c.thumbUrl);
+      for(const u of tries){
+        try{ dataUrl = await imageUrlToDataUrl(u, IMAGE_MASTER_DIM, 0.9); }catch(e){ dataUrl = null; }
+        if(dataUrl) break;
+      }
+      if(!dataUrl) throw new Error("the picture could not be downloaded");
+
+      const files = await buildImageFiles(dataUrl);
+      const base = (row.product.sku || row.product.id || "photo").toUpperCase();
+      const masterPath = "products/" + base + "." + files.ext;
+      const thumbPath  = "products/" + base + "-thumb." + files.ext;
+
+      let storageUrl = null, thumbnailUrl = null, storagePath = null, thumbnailPath = null;
+      if(storage){
+        storageUrl   = await uploadImageBlob(files.master.blob, masterPath);
+        thumbnailUrl = await uploadImageBlob(files.thumb.blob, thumbPath);
+        storagePath  = masterPath; thumbnailPath = thumbPath;
+      }
+
+      const image = {
+        originalUrl: c.imageUrl || null,
+        sourceUrl: c.sourceUrl || null,
+        sourceProvider: c.sourceProvider || null,
+        license: c.license || null,
+        licenseStatus: c.licenseStatus || "unknown",
+        licenseVerified: c.licenseStatus === "open",
+        match: c.match.level,
+        filename: base + "." + files.ext,
+        storagePath, thumbnailPath, storageUrl, thumbnailUrl,
+        // With Storage switched off the picture still has to live somewhere,
+        // so it stays on the record as before and the flag says which it is.
+        // With Storage off the picture lives on the record, so only the
+        // small copy is kept: 400px is plenty on a phone, and keeping the
+        // master too would make every shopper download five times the data
+        // for a picture no phone screen can show.
+        inlineImage: null,
+        inlineThumb: storage ? null : files.thumb.dataUrl,
+        retrievedAt: new Date().toISOString(),
+        uploadedAt: storage ? new Date().toISOString() : null
+      };
+      await db.collection("products").doc(row.product.id).update({
+        image: image,
+        thumb: thumbnailUrl || files.thumb.dataUrl,
+        imageSource: "database",
+        imageCredit: [c.creator, c.license, c.sourceProvider].filter(Boolean).join(" · "),
+        imageFile: image.filename
+      });
+      row.status = "downloaded";
+      if(btn){ btn.textContent = "Saved"; }
+    }catch(err){
+      console.error("finder save failed", err);
+      if(btn){ btn.disabled = false; btn.textContent = "Try again"; }
+      showToast("Couldn't save that one — " + (err.message || "unknown problem"));
+      return;
+    }
+    if(!btn) return;
+    renderFinderQueue();
+  }
+
+  async function finderManualPhoto(file, useCamera){
+    const p = products.find(x => x.id === finderTargetId);
+    if(!p || !file) return;
+    try{
+      const dataUrl = await preparePhotoFile(file, true, IMAGE_MASTER_DIM, 0.85);
+      const files = await buildImageFiles(dataUrl);
+      const base = (p.sku || p.id).toUpperCase();
+      let storageUrl = null, thumbnailUrl = null;
+      if(storage){
+        storageUrl   = await uploadImageBlob(files.master.blob, "products/" + base + "." + files.ext);
+        thumbnailUrl = await uploadImageBlob(files.thumb.blob, "products/" + base + "-thumb." + files.ext);
+      }
+      await db.collection("products").doc(p.id).update({
+        image: {
+          sourceProvider: useCamera ? "Own photograph" : "Own file",
+          license: "Owned by the shop", licenseStatus: "own", licenseVerified: true,
+          match: "own", filename: base + "." + files.ext,
+          storagePath: storage ? "products/" + base + "." + files.ext : null,
+          thumbnailPath: storage ? "products/" + base + "-thumb." + files.ext : null,
+          storageUrl, thumbnailUrl,
+          inlineImage: null,
+          inlineThumb: storage ? null : files.thumb.dataUrl,
+          retrievedAt: new Date().toISOString(),
+          uploadedAt: new Date().toISOString()
+        },
+        thumb: thumbnailUrl || files.thumb.dataUrl,
+        imageSource: "own", imageCredit: null, imageFile: base + "." + files.ext
+      });
+      const row = finderQueue.find(r => r.product.id === p.id);
+      if(row) row.status = "downloaded";
+      renderFinderQueue();
+      showToast("Photo saved");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't save that photo");
+    }
+    finderTargetId = null;
+  }
+
   // ---------- Finding a photo that is free to use ----------
   // Openverse indexes around 700 million openly licensed pictures from
   // Wikimedia Commons, Flickr, museums and the rest of the open web. Every
@@ -2978,6 +3537,7 @@
     currentThumbData = await makeThumbFromDataUrl(dataUrl, 220, 0.62);
     const lic = String(hit.license || "").toUpperCase() + (hit.license_version ? " " + hit.license_version : "");
     currentImageCredit = [hit.creator || "unknown photographer", lic || "open licence", "via Openverse"].join(" · ");
+    currentImageMeta = null;
     updatePhotoPreview();
     $("freePhotoPanel").style.display = "none";
     showToast("Photo added, credit recorded");
@@ -2994,6 +3554,7 @@
       currentImageData = dataUrl;
       currentThumbData = await makeThumbFromDataUrl(dataUrl, 220, 0.62);
       currentImageCredit = "Open Food Facts (CC BY-SA) · " + code;
+      currentImageMeta = null;
       updatePhotoPreview();
       showToast("Photo added");
     }catch(err){
@@ -5072,6 +5633,11 @@
     firebase.initializeApp(window.FIREBASE_CONFIG);
     auth = firebase.auth();
     db = firebase.firestore();
+    // Storage is optional. A shop that has never turned it on in the Firebase
+    // console still works — photos then stay inside the product record as
+    // before, and the app says so rather than failing at the last step.
+    try{ storage = firebase.storage ? firebase.storage() : null; }
+    catch(e){ storage = null; console.warn("Storage not available", e); }
     db.enablePersistence({ synchronizeTabs: true }).catch(() => { /* multiple tabs open, or unsupported browser — app still works, just without offline cache */ });
     auth.onAuthStateChanged(handleAuthChange);
 
@@ -5581,7 +6147,7 @@
       card.className = "product-card" + (p.stock <= 0 ? " out" : "");
       const lowClass = p.stock <= (p.threshold || 5) && p.stock > 0 ? " low" : "";
       card.innerHTML = `
-        <div class="thumb">${(p.thumb || p.image) ? `<img src="${p.thumb || p.image}" alt="" loading="lazy">` : productPlaceholder(p)}</div>
+        <div class="thumb">${photoDisplaySrc(p) ? `<img src="${photoDisplaySrc(p)}" alt="" loading="lazy">` : productPlaceholder(p)}</div>
         <div class="name">${escapeHtml(p.name)}</div>
         <div class="price">${peso(p.price)}</div>
         <div class="stock${lowClass}">${p.stock <= 0 ? "Out of stock" : formatStock(p.stock) + " in stock"}</div>
@@ -6099,7 +6665,7 @@
       const row = document.createElement("div");
       row.className = "inv-item";
       row.innerHTML = `
-        <div class="inv-thumb">${(p.thumb || p.image) ? `<img src="${p.thumb || p.image}" alt="" loading="lazy">` : productPlaceholder(p)}</div>
+        <div class="inv-thumb">${photoDisplaySrc(p) ? `<img src="${photoDisplaySrc(p)}" alt="" loading="lazy">` : productPlaceholder(p)}</div>
         <div class="info">
           <div class="name">${escapeHtml(p.name)}</div>
           <div class="meta">${p.sku ? escapeHtml(p.sku) + " · " : ""}${p.localName ? escapeHtml(p.localName) + " · " : ""}${peso(p.price)}${p.unit ? " / " + escapeHtml(p.unit) : ""} · ${escapeHtml(p.category || "Uncategorized")}${
@@ -6908,11 +7474,31 @@
     // finishes.
     for(const item of items){
       try{
-        const image = await preparePhotoFile(item.file, tidy, 640, 0.72);
-        const thumb = await makeThumbFromDataUrl(image, 220, 0.62);
+        const prepared = await preparePhotoFile(item.file, tidy, IMAGE_MASTER_DIM, 0.85);
+        const files = await buildImageFiles(prepared);
+        const base = (item.product.sku || item.product.id || "photo").toUpperCase();
+        let storageUrl = null, thumbnailUrl = null;
+        if(storage){
+          storageUrl   = await uploadImageBlob(files.master.blob, "products/" + base + "." + files.ext);
+          thumbnailUrl = await uploadImageBlob(files.thumb.blob, "products/" + base + "-thumb." + files.ext);
+        }
         await db.collection("products").doc(item.product.id).update({
-          image: image || null,
-          thumb: thumb || null,
+          image: {
+            sourceProvider: source === "own" ? "Own photograph" : "Uploaded file",
+            license: source === "own" ? "Owned by the shop" : null,
+            licenseStatus: source === "own" ? "own" : "unverified",
+            licenseVerified: source === "own",
+            match: "own",
+            filename: base + "." + files.ext,
+            storagePath: storage ? "products/" + base + "." + files.ext : null,
+            thumbnailPath: storage ? "products/" + base + "-thumb." + files.ext : null,
+            storageUrl, thumbnailUrl,
+            inlineImage: null,
+            inlineThumb: storage ? null : files.thumb.dataUrl,
+            retrievedAt: new Date().toISOString(),
+            uploadedAt: new Date().toISOString()
+          },
+          thumb: thumbnailUrl || files.thumb.dataUrl,
           imageSource: source,
           imageCredit: source === "own" ? null : (permission || null),
           imageFile: item.file.name
@@ -7658,6 +8244,7 @@
     $("pf-subUnitsPerPack").value = p && p.subUnitsPerPack ? p.subUnitsPerPack : "";
     $("pf-subUnitPrice").value = p && p.subUnitPrice != null ? p.subUnitPrice : "";
     toggleSubUnitFields();
+    renderProductImageSource(p);
     const fp = $("freePhotoPanel");
     if(fp){ fp.style.display = "none"; $("freePhotoResults").innerHTML = ""; $("freePhotoQuery").value = ""; }
     const lr = $("lookupResult");
@@ -7666,7 +8253,8 @@
     $("pf-unit").value = p && p.unit ? p.unit : "";
     $("pf-brand").value = p && p.brand ? p.brand : "";
     $("pf-size").value = p && p.size ? p.size : "";
-    currentImageData = p && p.image ? p.image : null;
+    currentImageMeta = (p && p.image && typeof p.image === "object") ? p.image : null;
+    currentImageData = p ? (photoDisplaySrc(p) || (typeof p.image === "string" ? p.image : null)) : null;
     currentThumbData = p && p.thumb ? p.thumb : null;
     currentImageCredit = p && p.imageCredit ? p.imageCredit : null;
     updatePhotoPreview();
@@ -7740,7 +8328,7 @@
       unit: $("pf-unit").value.trim() || null,
       brand: $("pf-brand").value.trim() || null,
       size: $("pf-size").value.trim() || null,
-      image: currentImageData || null,
+      image: currentImageMeta ? currentImageMeta : (currentImageData || null),
       thumb: currentThumbData || null,
       imageCredit: currentImageCredit || null,
       barcode: barcode || null,
@@ -9289,15 +9877,27 @@
   function updateThumbStatus(){
     const el = $("thumbStatus");
     if(!el) return;
-    const withPhoto = products.filter(p => p.image);
-    const missing = withPhoto.filter(p => !p.thumb).length;
-    if(withPhoto.length === 0){ el.textContent = "No product photos yet."; return; }
+    // Counts a product only when there is an actual stored file behind it.
+    // A filename, an empty image object, or a link to someone else's website
+    // is not a photo, and counting one is how a shop comes to believe it has
+    // pictures it does not have.
+    const withPhoto = products.filter(hasStoredPhoto);
+    const claimed = products.filter(p => p.image || p.imageFile).length;
+    const hollow = claimed - withPhoto.length;
+    const missing = withPhoto.filter(p => !photoDisplaySrc(p)).length;
+    if(withPhoto.length === 0){
+      el.textContent = hollow
+        ? "No stored product photos. " + hollow + " product" + (hollow === 1 ? " has a photo record" : "s have photo records") + " with no actual file behind them."
+        : "No product photos yet.";
+      return;
+    }
     // Rough weight estimate: base64 inflates the stored bytes by about a third.
-    const bytes = withPhoto.reduce((sum, p) => sum + ((p.thumb || p.image) || "").length, 0);
+    const bytes = withPhoto.reduce((sum, p) => sum + String(photoDisplaySrc(p) || "").length, 0);
     const mb = (bytes / 1048576).toFixed(1);
-    el.textContent = missing === 0
-      ? `All ${withPhoto.length} photos have a small listing copy — customers download about ${mb} MB.`
-      : `${missing} of ${withPhoto.length} photos have no small copy — customers currently download about ${mb} MB each visit.`;
+    const tail = hollow > 0 ? ` ${hollow} further product${hollow === 1 ? "" : "s"} claim a photo with no file behind it — those are not counted.` : "";
+    el.textContent = (missing === 0
+      ? `${withPhoto.length} product${withPhoto.length === 1 ? " has" : "s have"} a stored photo — customers download about ${mb} MB.`
+      : `${missing} of ${withPhoto.length} stored photos have no small copy — customers currently download about ${mb} MB each visit.`) + tail;
   }
 
   async function makeListingThumbs(){
@@ -11607,6 +12207,7 @@
         currentImageData = await preparePhotoFile(file, true, 640, 0.72);
         currentThumbData = await makeThumbFromDataUrl(currentImageData, 220, 0.62);
         currentImageCredit = null; // their own photo needs no attribution
+        currentImageMeta = null;
         updatePhotoPreview();
       }catch(err){
         console.error(err);
@@ -11619,7 +12220,7 @@
     $("findFreePhotoBtn").onclick = () => openFreePhotoPanel();
     $("freePhotoSearchBtn").onclick = () => searchFreePhotos();
     $("freePhotoQuery").onkeydown = (e) => { if(e.key === "Enter"){ e.preventDefault(); searchFreePhotos(); } };
-    $("removePhotoBtn").onclick = () => { currentImageData = null; currentThumbData = null; currentImageCredit = null; updatePhotoPreview(); };
+    $("removePhotoBtn").onclick = () => { currentImageData = null; currentThumbData = null; currentImageCredit = null; currentImageMeta = null; updatePhotoPreview(); };
     ["pf-price","pf-cost","pf-opcost","pf-markup","pf-competitor"].forEach(id => { $(id).oninput = updatePricingHelper; });
     $("pf-hasSubUnit").onchange = toggleSubUnitFields;
     $("addStickToCartBtn").onclick = addStickToCart;
@@ -11687,6 +12288,9 @@
     $("photoAssignSearch").oninput = (e) => renderPhotoAssignHits(normaliseForPhoto(e.target.value));
     $("photoAssignSkip").onclick = () => skipCurrentPhoto();
     $("photoTidy").onchange = () => renderPhotoSamples();
+    $("finderBtn").onclick = () => runImageFinder();
+    $("finderOneFile").onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; finderManualPhoto(f, false); };
+    $("finderOneCamera").onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; finderManualPhoto(f, true); };
     $("importFileBtn").onclick = () => $("importFile").click();
     $("importFile").onchange = (e) => {
       const file = e.target.files && e.target.files[0];
@@ -11832,7 +12436,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v67";
+  const APP_VERSION = "v69";
 
   function init(){
     applyRememberedDesign();
