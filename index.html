@@ -1395,10 +1395,8 @@
       </div>
       <div id="productImageSource" style="display:none;margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-sunk);font-size:11.5px;line-height:1.6;"></div>
       <div id="freePhotoPanel" style="display:none;margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-sunk);">
-        <div style="display:flex;gap:8px;">
-          <input type="text" id="freePhotoQuery" placeholder="What is it? e.g. toothbrush" autocomplete="off" style="flex:1;">
-          <button type="button" class="btn btn-secondary" id="freePhotoSearchBtn" style="flex:none;">Search</button>
-        </div>
+        <input type="text" id="freePhotoQuery" placeholder="What is it? e.g. toothbrush" autocomplete="off" style="width:100%;">
+        <button type="button" class="btn btn-secondary" id="freePhotoSearchBtn" style="margin-top:8px;">Search</button>
         <div id="freePhotoNote" style="font-size:11px;color:var(--text-muted);line-height:1.5;margin-top:7px;"></div>
         <div id="freePhotoResults" style="margin-top:10px;"></div>
       </div>
@@ -3474,7 +3472,7 @@
     const box = $("freePhotoResults");
     const q = ($("freePhotoQuery").value || "").trim();
     if(!q){ box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Type what the thing is first.</div>`; return; }
-    box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Searching…</div>`;
+    box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Searching for <b>${escapeHtml(q)}</b>…</div>`;
     try{
       const url = OPENVERSE_ENDPOINT + "?q=" + encodeURIComponent(q)
         + "&license_type=commercial&page_size=12&mature=false";
@@ -3487,7 +3485,7 @@
       const data = await res.json();
       const hits = (data && data.results) || [];
       if(!hits.length){
-        box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Nothing free-to-use matched that. Try plainer words, or photograph it yourself.</div>`;
+        box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Nothing free-to-use matched <b>${escapeHtml(q)}</b>. These databases hold very few Philippine products, so this is the usual answer for branded stock. Try fewer words, or photograph it yourself.</div>`;
         return;
       }
       freePhotoHits = hits;
@@ -12436,7 +12434,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v69";
+  const APP_VERSION = "v70";
 
   function init(){
     applyRememberedDesign();
