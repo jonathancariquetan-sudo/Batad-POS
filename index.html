@@ -857,6 +857,18 @@
   </section>
 
   <section class="view" id="view-reports">
+    <div id="advisorBlock" style="display:none;">
+      <div class="section-label" style="margin-top:0;">Today&rsquo;s advice</div>
+      <div class="report-card">
+        <div id="advisorForecast"></div>
+        <div id="advisorList" style="margin-top:12px;"></div>
+        <button type="button" class="btn btn-primary" id="advisorShareBtn" style="margin-top:14px;">Ask Claude about my shop</button>
+        <button type="button" class="btn btn-secondary" id="advisorCopyBtn" style="margin-top:8px;">Copy shop summary</button>
+        <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:8px 0 0;">Writes your sales, stock, costs and this advice into one page of text and hands it to Claude (or copies it). Type your question at the end. It contains your costs and margins &mdash; send it only to your own Claude account.</p>
+        <textarea id="advisorSummaryBox" readonly style="display:none;width:100%;height:220px;margin-top:10px;font-size:11px;font-family:ui-monospace,monospace;"></textarea>
+      </div>
+    </div>
+
     <div class="scope-note">
       <b>What this can and can't do</b>
       This generates BIR-style sales invoices, books of accounts, and tax estimates straight from the sales recorded in this POS, to make audits and BIR filing easier. It can't replace an independent CPA's audited financial statements, real bank statements from your bank, or a full payroll system — those need a professional/your bank, not just software. Review everything here with your bookkeeper or accountant before filing.
@@ -890,6 +902,26 @@
       <div id="breakEvenSummary"></div>
       <div id="breakEvenNotes"></div>
     </div>
+    </div>
+
+    <div id="cashFlowBlock" style="display:none;">
+    <div class="section-label">Cash flow</div>
+    <div class="report-card"><div id="cashFlowBody"></div></div>
+    </div>
+
+    <div id="balanceSheetBlock" style="display:none;">
+    <div class="section-label">Balance sheet</div>
+    <div class="report-card"><div id="balanceSheetBody"></div></div>
+    </div>
+
+    <div id="customersBlock" style="display:none;">
+    <div class="section-label">Your customers</div>
+    <div class="report-card"><div id="customersBody"></div></div>
+    </div>
+
+    <div id="deliveryReportBlock" style="display:none;">
+    <div class="section-label">Deliveries</div>
+    <div class="report-card"><div id="deliveryReportBody"></div></div>
     </div>
 
     <div id="pricingSettingsBlock">
@@ -1025,6 +1057,8 @@
            owner to approve. The batch uploader above is untouched. -->
       <input type="file" accept="image/*" id="finderOneFile" style="display:none;">
       <input type="file" accept="image/*" capture="environment" id="finderOneCamera" style="display:none;">
+      <button type="button" class="btn btn-primary" id="barcodeRoundBtn" style="margin-top:8px;">📦 Scan barcodes onto products</button>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Walk the shelf and scan each item. The POS asks which product it is, saves the barcode, and checks straight away whether the open databases hold a real photo of it. This is what the photo finder needs to work &mdash; it can&rsquo;t look anything up without a barcode.</p>
       <button type="button" class="btn btn-primary" id="finderBtn" style="margin-top:8px;">🔎 Find &amp; download product photos</button>
       <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Looks up each product by its barcode across the four open product databases, then by its full name and size. Nothing is saved until you have seen it. Expect a lot of &ldquo;no verified image found&rdquo; &mdash; most sari-sari lines are in no open database, and an honest blank beats a picture of the wrong thing.</p>
       <div id="finderStorageNote" style="display:none;"></div>
@@ -1034,7 +1068,7 @@
       <!-- The assignment panel. One file at a time, with a type-to-filter list
            rather than a 216-option dropdown: a select that long is unusable on
            a phone, and 176 of them would be several thousand DOM nodes. -->
-      <div id="photoAssignPanel" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-sunk);">
+      <div id="photoAssignPanel" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--neutral-tint);">
         <div style="font-size:12px;color:var(--text-muted);" id="photoAssignCount"></div>
         <div style="font-size:14px;font-weight:700;margin:4px 0 10px;overflow-wrap:anywhere;" id="photoAssignFile"></div>
         <input type="text" id="photoAssignSearch" placeholder="Type part of the product name" autocomplete="off" style="width:100%;">
@@ -1043,6 +1077,11 @@
       </div>
 
       <div id="photoImportPreview" style="display:none;margin-top:12px;"></div>
+    </div>
+
+    <div class="section-label">Unregistered barcodes</div>
+    <div class="report-card">
+      <div id="unknownBarcodeList"><div style="font-size:13px;color:var(--text-muted);">Loading…</div></div>
     </div>
 
     <div class="section-label">Store setup</div>
@@ -1305,6 +1344,11 @@
         <p id="cartCustomerNote" style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;"></p>
       </div>
     </div>
+    <div class="field" id="sukiField">
+      <label>Regular customer <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+      <select id="cartSuki"></select>
+      <button type="button" id="sukiNewBtn" style="background:none;border:0;padding:6px 0 0;color:var(--primary);font-weight:700;font-size:12.5px;cursor:pointer;">+ Add a new regular</button>
+    </div>
     <button class="btn btn-secondary" id="scpwdBtn" style="margin:0 0 4px;">🪪 Senior / PWD discount</button>
     <div class="summary-row" id="cartSubtotalRow" style="display:none;"><span>Subtotal</span><span id="cartSubtotal">₱0.00</span></div>
     <div class="summary-row" id="cartDiscountRow" style="display:none;"><span id="cartDiscountLabel">Discount</span><span id="cartDiscountAmt">₱0.00</span></div>
@@ -1393,8 +1437,8 @@
           <button type="button" class="btn btn-danger" id="removePhotoBtn" style="display:none;">Remove photo</button>
         </div>
       </div>
-      <div id="productImageSource" style="display:none;margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-sunk);font-size:11.5px;line-height:1.6;"></div>
-      <div id="freePhotoPanel" style="display:none;margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-sunk);">
+      <div id="productImageSource" style="display:none;margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--neutral-tint);font-size:11.5px;line-height:1.6;"></div>
+      <div id="freePhotoPanel" style="display:none;margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--neutral-tint);">
         <input type="text" id="freePhotoQuery" placeholder="What is it? e.g. toothbrush" autocomplete="off" style="width:100%;">
         <button type="button" class="btn btn-secondary" id="freePhotoSearchBtn" style="margin-top:8px;">Search</button>
         <div id="freePhotoNote" style="font-size:11px;color:var(--text-muted);line-height:1.5;margin-top:7px;"></div>
@@ -2187,6 +2231,12 @@
   </div>
 </div>
 
+<div class="sheet" id="supplierHistorySheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2 id="supHistTitle">Payments</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body"><div id="supHistBody"></div></div>
+</div>
+
 <div class="sheet" id="paymentSheet">
   <div class="sheet-handle"></div>
   <div class="sheet-header"><h2>Record a payment</h2><button class="sheet-close" data-close>✕</button></div>
@@ -2309,6 +2359,80 @@
       <input type="text" id="scanManualInput" placeholder="Barcode / code">
     </div>
     <button class="btn btn-secondary" id="scanManualAddBtn">Use this code</button>
+  </div>
+</div>
+
+<div class="sheet" id="barcodeAttachSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2 id="attachTitle">Unknown barcode</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <div style="font-family:ui-monospace,monospace;font-size:17px;font-weight:700;letter-spacing:.04em;margin-bottom:4px;" id="attachCode"></div>
+    <div style="font-size:12.5px;color:var(--text-muted);line-height:1.5;margin-bottom:12px;" id="attachIntro"></div>
+    <div id="attachChoice" style="display:none;">
+      <button type="button" class="btn btn-primary" id="attachChooseExisting">Attach to existing product</button>
+      <button type="button" class="btn btn-secondary" id="attachChooseNew" style="margin-top:8px;">Create new product</button>
+      <button type="button" class="btn btn-secondary" id="attachChooseCancel" style="margin-top:8px;">Cancel</button>
+    </div>
+    <div id="attachPick" style="display:none;">
+      <input type="text" id="attachSearch" placeholder="Name, code, brand or category" autocomplete="off" style="width:100%;">
+      <div id="attachHits" style="margin-top:10px;"></div>
+      <button type="button" class="btn btn-secondary" id="attachPickNew" style="margin-top:4px;">Not in the list — create new product</button>
+    </div>
+    <div id="attachDone" style="display:none;">
+      <button type="button" class="btn btn-primary" id="attachFindPhoto">Find product photo</button>
+    </div>
+    <div id="attachPhoto" style="display:none;margin-top:12px;"></div>
+    <button type="button" class="btn btn-secondary" id="attachSkipBtn" style="margin-top:10px;">Cancel</button>
+  </div>
+</div>
+
+<div class="sheet" id="openingSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2>Starting point</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <p style="font-size:12.5px;color:var(--text-muted);line-height:1.55;margin:0 0 12px;">What the shop had and owed on one day. Pick a day you can count: today is easiest. Everything after it is worked out from what the POS records.</p>
+    <div class="field"><label>As of</label><input type="date" id="op-date"></div>
+    <div class="field-row">
+      <div class="field"><label>Cash, GCash &amp; bank (₱)</label><input type="number" id="op-cash" inputmode="decimal" placeholder="0"></div>
+      <div class="field"><label>Stock at cost (₱)</label><input type="number" id="op-stock" inputmode="decimal" placeholder="0"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Equipment (₱)</label><input type="number" id="op-equipment" inputmode="decimal" placeholder="Fridge, shelves…"></div>
+      <div class="field"><label>Other assets (₱)</label><input type="number" id="op-other" inputmode="decimal" placeholder="0"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Owed to suppliers (₱)</label><input type="number" id="op-payables" inputmode="decimal" placeholder="0"></div>
+      <div class="field"><label>Loans still owed (₱)</label><input type="number" id="op-loans" inputmode="decimal" placeholder="0"></div>
+    </div>
+    <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:0 0 10px;">Stock and supplier figures are filled in from the POS as it stands today. Change them if you set an earlier date.</p>
+    <button type="button" class="btn btn-primary" id="openingSaveBtn">Save starting point</button>
+  </div>
+</div>
+
+<div class="sheet" id="sukiSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2>New regular</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <div class="field"><label>Name</label><input type="text" id="suki-name" placeholder="What you call them" autocomplete="off"></div>
+    <div class="field-row">
+      <div class="field"><label>Barangay (optional)</label><input type="text" id="suki-barangay" placeholder="e.g. Poblacion" autocomplete="off"></div>
+      <div class="field"><label>Phone (optional)</label><input type="tel" id="suki-phone" placeholder="09…" autocomplete="off"></div>
+    </div>
+    <label style="display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.5;margin:0 0 12px;cursor:pointer;">
+      <input type="checkbox" id="suki-consent" style="width:auto;margin-top:3px;">
+      <span>They agreed to have their number kept by the store. Needed only if you enter a phone number.</span>
+    </label>
+    <button type="button" class="btn btn-primary" id="sukiSaveBtn">Add and use for this sale</button>
+  </div>
+</div>
+
+<div class="sheet" id="riderSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2>Out for delivery</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;" id="riderOrderLine"></div>
+    <div class="field"><label>Who's taking it?</label><input type="text" id="riderName" list="riderList" placeholder="Rider's name" autocomplete="off"><datalist id="riderList"></datalist></div>
+    <button type="button" class="btn btn-primary" id="riderSaveBtn">Send out</button>
   </div>
 </div>
 
@@ -2945,7 +3069,10 @@
 
     let brandOk = null;
     if(wantBrand){
-      brandOk = normaliseForPhoto(cand.brand || cand.title || "").includes(normaliseForPhoto(brand));
+      // Stemmed, not just lower-cased: the shop writes "Nature Spring" and the
+      // database writes "Nature's Spring", and those are the same brand.
+      const stemJoin = (t) => photoStemAll(t).join(" ");
+      brandOk = stemJoin(cand.brand || cand.title || "").includes(stemJoin(brand));
       reasons.push(brandOk ? "brand matches" : "brand not confirmed");
     }
     // Size is compared by its number and unit, so "1L" and "1 l" agree and
@@ -3159,6 +3286,335 @@
         ? `<span style="color:var(--primary);font-weight:600;">in Firebase Storage</span>`
         : (im.inlineImage ? "on the product record (Storage is not switched on)" : `<span style="color:var(--danger);font-weight:600;">not stored — this product does not count as having a photo</span>`)}
       ${im.retrievedAt ? `<br>Retrieved: ${escapeHtml(String(im.retrievedAt).slice(0,10))}` : ""}`;
+  }
+
+
+  // ---------- Unknown barcodes: never thrown away ----------
+  // A barcode the shop doesn't recognise used to vanish with a toast. Now every
+  // one is written down — whoever scanned it, owner or staff — and becomes
+  // something the owner can act on:
+  //   at the till      Unknown barcode → attach it, create the product, or cancel
+  //   the shelf walk   straight to picking the product, with "create" beside it
+  //   the report       every code still waiting, how often and when it was seen
+  // One barcode belongs to one product. That is checked before anything saves,
+  // wherever the barcode comes from: a scan, the product form, or an import.
+  let attachCode = null;
+  let attachMode = null;        // "cart" | "round" | "report"
+  let attachProduct = null;     // the product the code ended up on
+  let pendingNewBarcode = null; // {code, via, mode} while the new-product form is open
+  let lastUnknownScan = { code: null, at: 0 };
+  let unknownBarcodeCache = [];
+
+  const ATTACH_VIA = {
+    cart:   "scanned at the till",
+    round:  "shelf walk",
+    report: "unregistered barcodes report",
+    form:   "typed in the product form",
+    create: "new product from a scan"
+  };
+
+  // A barcode is digits, but a QR code can hold anything — including the "/"
+  // a document name can't contain.
+  function barcodeDocId(code){
+    return String(code || "").trim().replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 128) || "_";
+  }
+
+  function barcodeTakenBy(code, exceptId){
+    const c = String(code || "").trim();
+    if(!c) return null;
+    return products.find(p => p.id !== exceptId && String(p.barcode || "").trim() === c) || null;
+  }
+  function barcodeOwner(code){ return barcodeTakenBy(code, null); }
+
+  function barcodeHistoryEntry(code, via){
+    return {
+      code: String(code),
+      at: new Date().toISOString(),
+      by: (auth && auth.currentUser && auth.currentUser.email) || null,
+      via: via || null
+    };
+  }
+
+  // The camera keeps reporting a code for as long as it's in view, so the same
+  // code seen again within a few seconds is one sighting, not several. Without
+  // this, holding a pack under the lens for two seconds counts as forty scans.
+  function isRepeatSighting(code){
+    const now = Date.now();
+    if(lastUnknownScan.code === code && now - lastUnknownScan.at < 4000) return true;
+    lastUnknownScan = { code, at: now };
+    return false;
+  }
+
+  async function recordUnknownBarcode(code, mode){
+    // Capped to what the database accepts. A barcode is 8–14 digits; only a QR
+    // code holding a whole web address comes near this, and the start of it is
+    // enough to recognise it by.
+    const c = String(code || "").trim().slice(0, 128);
+    if(!c || !db) return;
+    const ref = db.collection("unknownBarcodes").doc(barcodeDocId(c));
+    const uid = auth && auth.currentUser ? auth.currentUser.uid : null;
+    const ts = firebase.firestore.FieldValue.serverTimestamp();
+    try{
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if(!snap.exists){
+          tx.set(ref, { code: c, count: 1, firstSeenAt: ts, lastSeenAt: ts,
+                        firstBy: uid, lastBy: uid, lastMode: mode || "cart", resolved: false });
+        } else {
+          tx.update(ref, { count: (Number(snap.data().count) || 0) + 1, lastSeenAt: ts,
+                           lastBy: uid, lastMode: mode || "cart", resolved: false });
+        }
+      });
+    }catch(err){
+      // Recording is a courtesy to the owner; it must never hold up a sale.
+      console.warn("couldn't record the unknown barcode", err);
+    }
+  }
+
+  async function resolveUnknownBarcode(code, productId, how){
+    const c = String(code || "").trim();
+    if(!c || !db) return;
+    try{
+      await db.collection("unknownBarcodes").doc(barcodeDocId(c)).update({
+        resolved: true, resolvedProductId: productId || null, resolvedHow: how || null,
+        resolvedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }catch(err){ /* never recorded, or not the owner — nothing to resolve */ }
+    unknownBarcodeCache = unknownBarcodeCache.filter(u => u.code !== c);
+    renderUnknownBarcodes();
+  }
+
+  // ---------- The unknown-barcode sheet ----------
+  function openUnknownBarcode(code, mode){
+    attachCode = String(code || "").trim();
+    attachMode = mode || "cart";
+    attachProduct = null;
+    $("attachTitle").textContent = "Unknown barcode";
+    $("attachCode").textContent = attachCode;
+    $("attachIntro").textContent =
+      attachMode === "round"  ? "Pick the product this pack belongs to — or create it if it isn't in the list." :
+      attachMode === "report" ? "Scanned before, never registered. Attach it to a product or create one." :
+                                "Nothing in the shop has this barcode. It has been saved, so it won't be lost whichever you choose.";
+    showAttachStage(attachMode === "round" || attachMode === "report" ? "pick" : "choice");
+    openSheet("barcodeAttachSheet");
+  }
+
+  function showAttachStage(stage){
+    $("attachChoice").style.display = stage === "choice" ? "block" : "none";
+    $("attachPick").style.display   = stage === "pick"   ? "block" : "none";
+    $("attachDone").style.display   = stage === "done"   ? "block" : "none";
+    if(stage !== "done"){ $("attachPhoto").style.display = "none"; $("attachPhoto").innerHTML = ""; }
+    const skip = $("attachSkipBtn");
+    skip.style.display = stage === "choice" ? "none" : "block";
+    skip.textContent = stage === "done"
+      ? (attachMode === "round" ? "Scan the next one" : "Done")
+      : (attachMode === "round" ? "Skip — scan the next one" : "Cancel");
+    if(stage === "pick"){
+      $("attachSearch").value = "";
+      renderAttachHits("");
+      setTimeout(() => { try{ $("attachSearch").focus(); }catch(e){} }, 250);
+    }
+  }
+
+  // Searches name, code, brand and category. Products without a barcode come
+  // first: those are what this is for, and one that already has a barcode is
+  // usually the wrong pick.
+  function renderAttachHits(q){
+    const box = $("attachHits");
+    const words = photoStemAll(q);
+    let pool = products.slice();
+    if(words.length){
+      pool = products.filter(p => {
+        const toks = photoStemAll([p.name, p.brand, p.sku, p.category].filter(Boolean).join(" "));
+        return words.every(w => toks.some(t => t.includes(w) || w.includes(t)));
+      });
+    }
+    pool.sort((a, b) => (a.barcode ? 1 : 0) - (b.barcode ? 1 : 0) || String(a.name).localeCompare(String(b.name)));
+    const hits = pool.slice(0, 8);
+    if(!hits.length){
+      box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);padding:6px 0;">No product matches that — create it with the button below.</div>`;
+      return;
+    }
+    box.innerHTML = hits.map(p => `
+      <button type="button" class="btn btn-secondary attach-hit" data-pid="${escapeHtml(p.id)}"
+        style="text-align:left;margin-bottom:6px;font-size:13px;padding:10px 11px;">
+        ${escapeHtml(p.name)}
+        <span style="display:block;font-size:11px;color:var(--text-muted);font-weight:600;">
+          ${escapeHtml([p.sku || "no code", p.category].filter(Boolean).join(" · "))}${p.barcode ? " · already has barcode " + escapeHtml(p.barcode) : ""}
+        </span>
+      </button>`).join("");
+    Array.prototype.forEach.call(box.querySelectorAll(".attach-hit"), b => {
+      b.onclick = () => attachBarcodeTo(b.getAttribute("data-pid"));
+    });
+  }
+
+  async function attachBarcodeTo(pid){
+    const p = products.find(x => x.id === pid);
+    if(!p || !attachCode) return;
+    const other = barcodeTakenBy(attachCode, p.id);
+    if(other){
+      showToast("That barcode is already on " + other.name + " — one barcode, one product");
+      return;
+    }
+    if(p.barcode && String(p.barcode).trim() !== attachCode){
+      if(!confirm(p.name + " already has barcode " + p.barcode + ".\n\nReplace it with " + attachCode + "?")) return;
+    }
+    const via = ATTACH_VIA[attachMode] || "attached";
+    try{
+      await db.collection("products").doc(p.id).update({
+        barcode: attachCode,
+        // Kept on the product, not overwritten: every barcode it has ever had,
+        // when, by whom, and how it got there.
+        barcodeHistory: firebase.firestore.FieldValue.arrayUnion(barcodeHistoryEntry(attachCode, via))
+      });
+      p.barcode = attachCode;
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't save that barcode");
+      return;
+    }
+    resolveUnknownBarcode(attachCode, p.id, via);
+    attachProduct = p;
+    showToast("Barcode saved to " + p.name);
+    if(attachMode === "cart") addToCart(p);
+    showAttachStage("done");
+    $("attachTitle").textContent = "Barcode registered";
+    $("attachIntro").textContent = attachMode === "cart"
+      ? "Saved to " + p.name + " and added to the sale. Next time it scans straight in."
+      : "Saved to " + p.name + ". Next time it scans straight in.";
+    // The shelf walk looks for a photo at once, while the pack is still in
+    // your hand. At the till there is a customer waiting, so it's a button.
+    if(attachMode === "round") findPhotoForAttached();
+  }
+
+  function createNewFromScan(){
+    const code = attachCode, mode = attachMode;
+    closeSheet("barcodeAttachSheet");
+    setTimeout(() => {
+      openProductForm(null);                 // resets the form, barcode included
+      $("pf-barcode").value = code;
+      pendingNewBarcode = { code, via: ATTACH_VIA.create, mode };
+      showToast("Barcode " + code + " filled in — add the rest and save");
+    }, 250);
+  }
+
+  // Barcode first — the one search that can actually identify a pack.
+  async function findPhotoForAttached(){
+    const p = attachProduct, code = attachCode;
+    if(!p || !code) return;
+    $("attachDone").style.display = "none";
+    const box = $("attachPhoto");
+    box.style.display = "block";
+    if(hasStoredPhoto(p)){
+      box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">${escapeHtml(p.name)} already has a photo.</div>`;
+      return;
+    }
+    box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Checking the open product databases for ${escapeHtml(code)}…</div>`;
+    let cand = null;
+    try{ cand = await lookupByBarcodeAll(code); }catch(e){ cand = null; }
+    if(!cand){
+      box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);line-height:1.5;"><b>No verified image found.</b> The barcode is saved all the same — photograph it with <b>Take photo</b> in the product, or leave it on its category tile.</div>`;
+      return;
+    }
+    cand.match = scoreCandidate(p, cand);
+    const ok = cand.match.level === "strong";
+    box.innerHTML = `
+      <div style="display:flex;gap:11px;align-items:flex-start;">
+        <img src="${escapeHtml(cand.thumbUrl)}" alt="" style="width:92px;height:92px;object-fit:contain;background:#fff;border:1px solid var(--border);border-radius:9px;flex:none;">
+        <div style="min-width:0;font-size:12px;line-height:1.5;">
+          <div style="font-weight:700;font-size:13px;">${escapeHtml([cand.brand, cand.title].filter(Boolean).join(" ") || "Unnamed record")}</div>
+          <div style="color:var(--text-muted);">${escapeHtml(cand.quantity || "")}</div>
+          <div style="color:${ok ? "var(--primary)" : "var(--danger)"};font-weight:700;margin-top:3px;">${ok ? "Matches your product" : "Check it's the same item"}</div>
+          <div style="color:var(--text-muted);">${escapeHtml(cand.match.reasons.join(" · "))}</div>
+          <div style="color:var(--text-muted);">${escapeHtml(cand.sourceProvider)} · ${escapeHtml(cand.license)} · <a href="${escapeHtml(cand.sourceUrl)}" target="_blank" rel="noopener" style="color:var(--primary);">source</a></div>
+        </div>
+      </div>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:8px 0 0;">Hold it next to the pack. Save it only if it is the same product and the same size.</p>
+      <button type="button" class="btn btn-primary" id="attachSavePhoto" style="margin-top:9px;">Download &amp; save this photo</button>`;
+    $("attachSavePhoto").onclick = async () => {
+      const btn = $("attachSavePhoto");
+      const row = { product: p, candidates: [cand], chosen: cand, status: "found" };
+      await saveFinderRow(row, btn);
+      if(row.status === "downloaded"){
+        box.innerHTML = `<div style="font-size:12.5px;color:var(--primary);font-weight:700;">✓ Photo saved to ${escapeHtml(p.name)}.</div>`;
+      }
+    };
+  }
+
+  function attachSkip(){
+    const wasRound = attachMode === "round";
+    closeSheet("barcodeAttachSheet");
+    attachCode = null; attachProduct = null;
+    if(wasRound) setTimeout(() => openScanSheet("round"), 250);
+  }
+
+  function startBarcodeRound(){
+    if(currentUserRole !== "owner"){ showToast("Only an owner can attach barcodes"); return; }
+    const without = products.filter(p => !p.barcode).length;
+    showToast(without + " product" + (without === 1 ? "" : "s") + " still need a barcode");
+    openScanSheet("round");
+  }
+
+  // ---------- Report: unregistered barcodes ----------
+  async function loadUnknownBarcodes(){
+    if(!db || (currentUserRole !== "owner" && currentUserRole !== "manager")) return;
+    try{
+      const snap = await db.collection("unknownBarcodes").where("resolved", "==", false).get();
+      unknownBarcodeCache = snap.docs.map(d => d.data());
+    }catch(err){
+      console.warn("couldn't load unregistered barcodes", err);
+      unknownBarcodeCache = null;
+    }
+    renderUnknownBarcodes();
+  }
+
+  function unknownWhen(t){
+    const d = t && t.toDate ? t.toDate() : (t ? new Date(t) : null);
+    if(!d || isNaN(d)) return "—";
+    return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" }) + " " +
+           d.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
+  }
+
+  function renderUnknownBarcodes(){
+    const box = document.getElementById("unknownBarcodeList");
+    if(!box) return;
+    if(unknownBarcodeCache === null){
+      box.innerHTML = `<div class="margin-note">Couldn't load them. If this persists, the latest security rules probably haven't been published yet.</div>`;
+      return;
+    }
+    // A code that has since landed on a product is done, whatever the log says.
+    const rows = unknownBarcodeCache
+      .filter(u => u && u.code && !barcodeOwner(u.code))
+      .sort((a, b) => ((b.lastSeenAt && b.lastSeenAt.seconds) || 0) - ((a.lastSeenAt && a.lastSeenAt.seconds) || 0));
+    if(!rows.length){
+      box.innerHTML = `<div style="font-size:13px;color:var(--text-muted);">None. Every barcode scanned so far belongs to a product.</div>`;
+      return;
+    }
+    const owner = currentUserRole === "owner";
+    box.innerHTML = `
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">${rows.length} barcode${rows.length === 1 ? "" : "s"} scanned but not yet on any product. Most-recent first — the ones scanned most often are the ones customers are asking for.</div>
+      <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;">
+        <thead><tr style="text-align:left;color:var(--text-muted);">
+          <th style="padding:6px 6px 6px 0;font-weight:700;">Barcode</th>
+          <th style="padding:6px;font-weight:700;">First scanned</th>
+          <th style="padding:6px;font-weight:700;text-align:right;">Scans</th>
+          <th style="padding:6px;font-weight:700;">Last scanned</th>
+          ${owner ? `<th></th>` : ""}
+        </tr></thead>
+        <tbody>${rows.map(u => `
+          <tr style="border-top:1px solid var(--border);">
+            <td style="padding:7px 6px 7px 0;font-family:ui-monospace,monospace;">${escapeHtml(u.code)}</td>
+            <td style="padding:7px 6px;white-space:nowrap;">${escapeHtml(unknownWhen(u.firstSeenAt))}</td>
+            <td style="padding:7px 6px;text-align:right;font-weight:700;">${Number(u.count) || 1}</td>
+            <td style="padding:7px 6px;white-space:nowrap;">${escapeHtml(unknownWhen(u.lastSeenAt))}</td>
+            ${owner ? `<td style="padding:7px 0 7px 6px;"><button type="button" class="unknown-resolve" data-code="${escapeHtml(u.code)}" style="background:none;border:0;color:var(--primary);font-weight:700;font-size:12px;padding:0;cursor:pointer;">Register</button></td>` : ""}
+          </tr>`).join("")}
+        </tbody>
+      </table></div>`;
+    Array.prototype.forEach.call(box.querySelectorAll(".unknown-resolve"), b => {
+      b.onclick = () => openUnknownBarcode(b.getAttribute("data-code"), "report");
+    });
   }
 
   // ---------- Find & download, across the whole catalogue ----------
@@ -3471,42 +3927,73 @@
   async function searchFreePhotos(){
     const box = $("freePhotoResults");
     const q = ($("freePhotoQuery").value || "").trim();
-    if(!q){ box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Type what the thing is first.</div>`; return; }
-    box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Searching for <b>${escapeHtml(q)}</b>…</div>`;
-    try{
-      const url = OPENVERSE_ENDPOINT + "?q=" + encodeURIComponent(q)
-        + "&license_type=commercial&page_size=12&mature=false";
-      const res = await fetch(url, { headers: { "Accept": "application/json" } });
-      if(res.status === 429){
-        box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Too many searches for now — Openverse limits how often it can be asked. Wait a minute and try again.</div>`;
-        return;
-      }
-      if(!res.ok) throw new Error("status " + res.status);
-      const data = await res.json();
-      const hits = (data && data.results) || [];
-      if(!hits.length){
-        box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Nothing free-to-use matched <b>${escapeHtml(q)}</b>. These databases hold very few Philippine products, so this is the usual answer for branded stock. Try fewer words, or photograph it yourself.</div>`;
-        return;
-      }
-      freePhotoHits = hits;
-      // Field names are read defensively: this is somebody else's API and it is
-      // free to change shape without telling us.
-      box.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">` + hits.map((h, i) => {
+    const code = ($("pf-barcode").value || "").trim();
+    if(!q && !code){ box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Type what the thing is first.</div>`; return; }
+    box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Searching for <b>${escapeHtml(code ? "barcode " + code : q)}</b>…</div>`;
+
+    // The barcode first, when the product has one. It is the only search that
+    // identifies the actual pack; words can only find things that look alike.
+    let byCode = null;
+    if(code){
+      try{ byCode = await lookupByBarcodeAll(code); }catch(e){ byCode = null; }
+    }
+
+    let hits = [];
+    let textFailed = false, limited = false;
+    if(q){
+      try{
+        const url = OPENVERSE_ENDPOINT + "?q=" + encodeURIComponent(q)
+          + "&license_type=commercial&page_size=12&mature=false";
+        const res = await fetch(url, { headers: { "Accept": "application/json" } });
+        if(res.status === 429) limited = true;
+        else if(!res.ok) textFailed = true;
+        else { const data = await res.json(); hits = (data && data.results) || []; }
+      }catch(err){ console.error(err); textFailed = true; }
+    }
+    freePhotoHits = hits;
+
+    if(!byCode && !hits.length){
+      box.innerHTML = limited
+        ? `<div style="font-size:12.5px;color:var(--text-muted);">Too many searches for now — Openverse limits how often it can be asked. Wait a minute and try again.</div>`
+        : textFailed && !code
+        ? `<div style="font-size:12.5px;color:var(--danger);">Couldn't reach the picture search — check your connection, or photograph the item instead.</div>`
+        : `<div style="font-size:12.5px;color:var(--text-muted);line-height:1.5;"><b>No verified product image found.</b>${code ? " Barcode " + escapeHtml(code) + " isn't in the open product databases," : " No barcode on this product yet, so only a word search was possible,"}${q ? " and nothing free-to-use matched <b>" + escapeHtml(q) + "</b>." : "."} Photograph it instead.</div>`;
+      return;
+    }
+
+    let html = "";
+    if(byCode){
+      html += `<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;">Found by barcode ${escapeHtml(code)}</div>
+        <button type="button" id="freePhotoByCode" style="display:flex;gap:10px;align-items:center;width:100%;padding:8px;border:2px solid var(--primary);border-radius:9px;background:var(--surface);text-align:left;cursor:pointer;margin-bottom:10px;">
+          <img src="${escapeHtml(byCode.thumbUrl)}" alt="" style="width:64px;height:64px;object-fit:contain;background:#fff;border-radius:6px;flex:none;">
+          <span style="font-size:12px;line-height:1.45;min-width:0;">
+            <b>${escapeHtml([byCode.brand, byCode.title].filter(Boolean).join(" ") || "Product record")}</b><br>
+            ${escapeHtml(byCode.quantity || "")}<br>
+            <span style="color:var(--text-muted);">${escapeHtml(byCode.sourceProvider)} · ${escapeHtml(byCode.license)}</span>
+          </span>
+        </button>`;
+    }
+    if(hits.length){
+      html += `<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;">${byCode ? "Also found by name" : "Found by name"} — check these are the same item</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">` + hits.map((h, i) => {
         const thumb = h.thumbnail || h.url || "";
         const lic = String(h.license || "").toUpperCase() + (h.license_version ? " " + h.license_version : "");
         return `<button type="button" class="free-photo-hit" data-i="${i}" style="padding:0;border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:hidden;text-align:left;cursor:pointer;">
           <img src="${escapeHtml(thumb)}" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">
           <span style="display:block;font-size:9.5px;color:var(--text-muted);padding:4px 5px;line-height:1.3;">${escapeHtml(lic || "open licence")}<br>${escapeHtml((h.creator || "unknown").slice(0,18))}</span>
         </button>`;
-      }).join("") + `</div>
-      <p style="font-size:10.5px;color:var(--text-muted);line-height:1.5;margin:8px 0 0;">From Openverse. Tap one to use it — the licence and the photographer are recorded against the product for you.</p>`;
-      Array.prototype.forEach.call(box.querySelectorAll(".free-photo-hit"), b => {
-        b.onclick = () => adoptFreePhoto(freePhotoHits[Number(b.getAttribute("data-i"))]);
-      });
-    }catch(err){
-      console.error(err);
-      box.innerHTML = `<div style="font-size:12.5px;color:var(--danger);">Couldn't reach the picture search — check your connection, or photograph the item instead.</div>`;
+      }).join("") + `</div>`;
     }
+    html += `<p style="font-size:10.5px;color:var(--text-muted);line-height:1.5;margin:8px 0 0;">Tap one to use it — the source and licence are recorded against the product for you.</p>`;
+    box.innerHTML = html;
+    const bc = $("freePhotoByCode");
+    if(bc) bc.onclick = async () => {
+      await adoptLookupPhoto(byCode.imageUrl, code);
+      $("freePhotoPanel").style.display = "none";
+    };
+    Array.prototype.forEach.call(box.querySelectorAll(".free-photo-hit"), b => {
+      b.onclick = () => adoptFreePhoto(freePhotoHits[Number(b.getAttribute("data-i"))]);
+    });
   }
 
   let freePhotoHits = [];
@@ -4529,6 +5016,21 @@
     const same = [];      // already here, nothing to change
     const orphans = [];   // the file points at something that isn't here
 
+    // One barcode, one product, here too. The rest of the row still goes in;
+    // only the clashing barcode is left out, and the owner is told which.
+    const droppedCodes = [];
+    const codeCount = {};
+    rows.forEach(r => { if(r.barcode) codeCount[r.barcode] = (codeCount[r.barcode] || 0) + 1; });
+    rows.forEach(r => {
+      if(!r.barcode) return;
+      const own = findExistingProduct(r);
+      const other = barcodeTakenBy(r.barcode, own ? own.id : null);
+      if(codeCount[r.barcode] > 1 || other){
+        droppedCodes.push(r.barcode + (other ? " (already on " + other.name + ")" : " (repeated in the file)"));
+        r.barcode = null;
+      }
+    });
+
     rows.forEach(r => {
       const hit = findExistingProduct(r);
       if(!hit){
@@ -4546,6 +5048,9 @@
     });
 
     let html = "";
+    if(droppedCodes.length > 0){
+      html += `<div class="margin-note">${droppedCodes.length} barcode${droppedCodes.length === 1 ? "" : "s"} left out so no two products share one: ${escapeHtml(droppedCodes.slice(0,3).join("; "))}${droppedCodes.length > 3 ? "…" : ""}. The rest of those lines still go in.</div>`;
+    }
     if(errors.length > 0){
       html += `<div class="margin-note">${errors.length} line${errors.length === 1 ? "" : "s"} skipped: ${escapeHtml(errors.slice(0,3).join("; "))}${errors.length > 3 ? "…" : ""}</div>`;
     }
@@ -5414,6 +5919,21 @@
       closeSheet("scanSheet");
       return;
     }
+    code = String(code).trim();
+    // The shelf walk: every scan is a question of which product it is.
+    if(scanMode === "round"){
+      stopScanner();
+      closeSheet("scanSheet");
+      const known = barcodeOwner(code);
+      if(known){
+        showToast("Already on " + known.name + " — scan the next one");
+        setTimeout(() => openScanSheet("round"), 900);
+        return;
+      }
+      if(!isRepeatSighting(code)) recordUnknownBarcode(code, "round");
+      openUnknownBarcode(code, "round");
+      return;
+    }
     const product = products.find(p => (p.barcode || "").trim() === code);
     if(product){
       addToCart(product);
@@ -5421,7 +5941,17 @@
       stopScanner();
       closeSheet("scanSheet");
     } else {
-      showToast("No product found for that barcode");
+      // Never discarded. Written down first, whoever is at the till, so it
+      // survives even if nobody acts on it now.
+      const fresh = !isRepeatSighting(code);
+      if(fresh) recordUnknownBarcode(code, "cart");
+      if(currentUserRole === "owner"){
+        stopScanner();
+        closeSheet("scanSheet");
+        openUnknownBarcode(code, "cart");
+      } else if(fresh){
+        showToast("Unknown barcode " + code + " — saved for the owner to register");
+      }
     }
   }
 
@@ -5727,6 +6257,7 @@
       customers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderUtangList();
       renderCartCustomer();
+      renderCartSuki();
       renderReceivables();
     }, (err) => { console.error(err); }));
 
@@ -5759,6 +6290,7 @@
 
     managerListenerUnsubs.push(db.collection("sales").orderBy("timestamp", "desc").limit(2000).onSnapshot((snap) => {
       sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if($("view-reports").classList.contains("active")) renderAdvisor();
       renderDayCard();
       renderDashboard();
       renderMarginReport();
@@ -5841,6 +6373,11 @@
     ownerListenerUnsubs.push(db.collection("purchases").orderBy("date", "desc").limit(400).onSnapshot((snap) => {
       purchases = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderBuyingView();
+    }, (err) => { console.error(err); }));
+
+    ownerListenerUnsubs.push(db.collection("settings").doc("openingPosition").onSnapshot((doc) => {
+      openingPosition = doc.exists ? doc.data() : null;
+      if($("view-reports").classList.contains("active")) renderBusinessModules();
     }, (err) => { console.error(err); }));
 
     ownerListenerUnsubs.push(db.collection("supplierPayments").orderBy("date", "desc").limit(400).onSnapshot((snap) => {
@@ -6336,6 +6873,8 @@
 
   function clearCartCustomer(){
     cartCustomerId = null;
+    cartSukiId = null;
+    renderCartSuki();
     if($("cartPayment")) $("cartPayment").value = "cash";
     renderCartCustomer();
   }
@@ -6547,6 +7086,10 @@
       // every night until someone gave up on counting the drawer at all.
       customerId: payMethod === "utang" ? cartCustomerId : null,
       customerName: payMethod === "utang" ? (customerById(cartCustomerId) || {}).name || null : null,
+      // Who the customer was, when it's known — for the customer reports only.
+      // Kept apart from customerId, which the credit book alone reads.
+      sukiId: (payMethod === "utang" ? cartCustomerId : cartSukiId) || null,
+      sukiName: ((payMethod === "utang" ? customerById(cartCustomerId) : customerById(cartSukiId)) || {}).name || null,
       businessDate: businessDate,
       invoiceNumber: invoiceNumber,
       cashierName: currentUserName || null,
@@ -7448,9 +7991,9 @@
         const before = await resizeImageFile(item.file, 220, 0.7);
         const after  = await preparePhotoFile(item.file, true, 220, 0.7);
         html += `<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
-          <img src="${before}" alt="before" style="width:88px;height:88px;object-fit:contain;background:var(--bg-sunk);border:1px solid var(--border);border-radius:8px;">
+          <img src="${before}" alt="before" style="width:88px;height:88px;object-fit:contain;background:var(--neutral-tint);border:1px solid var(--border);border-radius:8px;">
           <span style="color:var(--text-muted);font-size:18px;">&rarr;</span>
-          <img src="${after}" alt="after" style="width:88px;height:88px;object-fit:contain;background:var(--bg-sunk);border:1px solid var(--border);border-radius:8px;">
+          <img src="${after}" alt="after" style="width:88px;height:88px;object-fit:contain;background:var(--neutral-tint);border:1px solid var(--border);border-radius:8px;">
           <span style="font-size:11.5px;color:var(--text-muted);min-width:0;overflow-wrap:anywhere;">${escapeHtml(item.file.name)}</span>
         </div>`;
       }catch(err){ /* a sample that won't render is not worth stopping for */ }
@@ -8209,6 +8752,7 @@
   }
 
   function openProductForm(productId){
+    pendingNewBarcode = null;
     editingProductId = productId || null;
     const p = productId ? products.find(p => p.id === productId) : null;
     $("productSheetTitle").textContent = p ? "Edit product" : "Add product";
@@ -8307,6 +8851,16 @@
     const subUnitPrice = parseFloat($("pf-subUnitPrice").value);
 
     if(!name){ showToast("Enter a product name"); return; }
+    // One barcode, one product — otherwise a scan would pick whichever of the
+    // two the POS happened to find first, and ring up the wrong price.
+    if(barcode){
+      const other = barcodeTakenBy(barcode, editingProductId);
+      if(other){ showToast("Barcode " + barcode + " is already on " + other.name + " — one barcode, one product"); return; }
+    }
+    const prevBarcode = editingProductId
+      ? String((products.find(x => x.id === editingProductId) || {}).barcode || "").trim() : "";
+    const barcodeChanged = !!barcode && barcode !== prevBarcode;
+    const barcodeVia = (pendingNewBarcode && pendingNewBarcode.code === barcode) ? pendingNewBarcode.via : ATTACH_VIA.form;
     if(isNaN(price) || price < 0){ showToast("Enter a valid price"); return; }
     if(isNaN(stock) || stock < 0){ showToast("Enter a valid stock quantity"); return; }
     if(hasSubUnit){
@@ -8344,6 +8898,9 @@
       subUnitsPerPack: hasSubUnit ? subUnitsPerPack : null,
       subUnitPrice: hasSubUnit ? subUnitPrice : null
     };
+    if(barcodeChanged){
+      data.barcodeHistory = firebase.firestore.FieldValue.arrayUnion(barcodeHistoryEntry(barcode, barcodeVia));
+    }
     const existingCosts = (editingProductId && productCosts[editingProductId]) || {};
     const costData = {
       cost: isNaN(cost) ? null : cost,
@@ -8365,9 +8922,12 @@
         // on a create — strip those markers before adding.
         const createData = Object.assign({}, data);
         ["cost","opCost","markup","competitorPrice"].forEach(k => { delete createData[k]; });
+        if(barcodeChanged) createData.barcodeHistory = [barcodeHistoryEntry(barcode, barcodeVia)];
         const ref = await db.collection("products").add(createData);
         productId = ref.id;
       }
+      if(barcodeChanged) resolveUnknownBarcode(barcode, productId, barcodeVia);
+      pendingNewBarcode = null;
       // The product itself is already saved at this point — a failure to store
       // the private cost figures must not be reported as "couldn't save
       // product", or the owner will re-enter everything needlessly.
@@ -10044,6 +10604,7 @@
       <div class="meta-line">${methodLine}</div>
       <div class="meta-line">${payLine}</div>
       ${deliveryEconLine}
+      ${o.outAt ? `<div class="meta-line" style="font-weight:700;">🛵 With ${escapeHtml(o.riderName || "rider")} since ${escapeHtml(new Date(o.outAt).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" }))}</div>` : ""}
       <div class="items-line">${escapeHtml(itemsSummary)}</div>
       <div class="amt-row"><span class="amt">${peso(o.total)}</span></div>
     `;
@@ -10054,6 +10615,13 @@
       actions.appendChild(makeActionBtn("Cancel", "cancel", () => cancelOrder(o)));
     } else if(o.status === "accepted"){
       actions.appendChild(makeActionBtn("Mark ready", "ready", () => updateOrderStatus(o.id, "ready")));
+      actions.appendChild(makeActionBtn("Cancel", "cancel", () => cancelOrder(o)));
+    } else if(o.status === "ready" && o.method === "delivery" && !o.outAt){
+      actions.appendChild(makeActionBtn("Out for delivery", "ready", () => openRiderSheet(o)));
+      actions.appendChild(makeActionBtn("Complete", "complete", () => completeOrder(o)));
+      actions.appendChild(makeActionBtn("Cancel", "cancel", () => cancelOrder(o)));
+    } else if(o.status === "ready" && o.method === "delivery"){
+      actions.appendChild(makeActionBtn("Delivered", "complete", () => completeOrder(o)));
       actions.appendChild(makeActionBtn("Cancel", "cancel", () => cancelOrder(o)));
     } else if(o.status === "ready"){
       actions.appendChild(makeActionBtn("Complete", "complete", () => completeOrder(o)));
@@ -10073,7 +10641,10 @@
 
   async function updateOrderStatus(orderId, status){
     try{
-      await db.collection("orders").doc(orderId).update({ status, updatedAt: new Date().toISOString() });
+      const now = new Date().toISOString();
+      const upd = { status, updatedAt: now };
+      if(status === "accepted") upd.acceptedAt = now;
+      await db.collection("orders").doc(orderId).update(upd);
       showToast("Order " + status);
     }catch(err){
       console.error(err);
@@ -10161,9 +10732,9 @@
           batch.update(db.collection("products").doc(pid), { stock: firebase.firestore.FieldValue.increment(-deltas[pid]) });
         });
       }
-      batch.update(db.collection("orders").doc(o.id), { status: "completed", updatedAt: new Date().toISOString() });
+      batch.update(db.collection("orders").doc(o.id), { status: "completed", updatedAt: new Date().toISOString(), completedAt: new Date().toISOString() });
       await batch.commit();
-      showToast("Order completed");
+      showToast(o.method === "delivery" ? "Delivered" : "Order completed");
     }catch(err){
       console.error(err);
       showToast("Couldn't complete order");
@@ -10642,7 +11213,10 @@
   }
 
   async function renderReportsView(){
+    renderAdvisor();
+    renderBusinessModules();
     renderPhotoUnverified();
+    loadUnknownBarcodes();
     $("reportQLabel").textContent = "Q" + reportQuarter.q + " " + reportQuarter.year;
     $("taxReportCard").textContent = "Loading…";
     await loadReportSales();
@@ -11315,11 +11889,17 @@
           <div class="nm">${escapeHtml(s.name)}</div>
           <div class="bal" style="${bal > 0 && lim > 0 && bal > lim ? "color:#B3261E;" : ""}">${peso(bal)}</div>
         </div>
-        <div class="meta">${terms}${lim > 0 ? " · limit " + peso(lim) : ""}<br>Delivers in ${lead} day${lead === 1 ? "" : "s"}, calls every ${cyc} day${cyc === 1 ? "" : "s"}${s.contact ? " · " + escapeHtml(s.contact) : ""}</div>
+        <div class="meta">${terms}${lim > 0 ? " · limit " + peso(lim) : ""}<br>Delivers in ${lead} day${lead === 1 ? "" : "s"}, calls every ${cyc} day${cyc === 1 ? "" : "s"}${s.contact ? " · " + escapeHtml(s.contact) : ""}${(() => {
+          const last = supplierPaymentHistory(s.id).find(r => r.kind !== "reversal" && !r.cancelled);
+          const ahead = supplierPaidAhead(s.id);
+          return (last ? `<br>Last paid ${peso(last.amount)} on ${escapeHtml(last.date)}` : "") +
+                 (ahead > 0.005 ? `<br><span style="color:var(--info);font-weight:700;">${peso(ahead)} paid ahead</span>` : "");
+        })()}</div>
         ${lim > 0 ? `<div class="limit-bar ${cls}"><span style="width:${pct}%;"></span></div>` : ""}
         <div class="sup-actions">
           <button data-sup-delivery="${s.id}">Record delivery</button>
           <button data-sup-payment="${s.id}">Record payment</button>
+          <button data-sup-history="${s.id}">Payments</button>
           <button data-sup-credit="${s.id}">Credit</button>
           <button data-sup-edit="${s.id}">Edit</button>
         </div>
@@ -11329,6 +11909,7 @@
     el.querySelectorAll("[data-sup-edit]").forEach(b => b.onclick = () => openSupplierSheet(b.dataset.supEdit));
     el.querySelectorAll("[data-sup-delivery]").forEach(b => b.onclick = () => openDeliverySheet(b.dataset.supDelivery));
     el.querySelectorAll("[data-sup-payment]").forEach(b => b.onclick = () => openPaymentSheet(b.dataset.supPayment));
+    el.querySelectorAll("[data-sup-history]").forEach(b => b.onclick = () => openSupplierHistory(b.dataset.supHistory));
     el.querySelectorAll("[data-sup-credit]").forEach(b => b.onclick = () => openCreditSheet(b.dataset.supCredit));
   }
 
@@ -11611,10 +12192,1183 @@
 
   let lastOrderPlan = [];
 
+  // =====================================================================
+  // THE ADVISOR — today's advice, from the shop's own numbers
+  // =====================================================================
+  // No model and no internet. Every line here is arithmetic on what the POS
+  // already holds — sales, stock, costs, running expenses — so it works with
+  // the signal down, costs nothing, and can show its working. It reuses the
+  // same engines as the Buying tab and the break-even, so the advice can never
+  // disagree with the numbers on the other screens.
+  //
+  // What it will not do is guess. With a week of sales there is no forecast;
+  // with no costs there is no profit figure; and it says so instead of
+  // producing a confident number from nothing.
+  const ADVISOR_MIN_DAYS = 7;     // forecasts start here
+  const ADVISOR_GOOD_DAYS = 28;   // and become trustworthy around here
+  const ADVISOR_DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+
+  function advisorDailyTotals(){
+    const m = {};
+    sales.forEach(s => {
+      const d = businessDateOf(s);
+      if(!d) return;
+      m[d] = (m[d] || 0) + signedTotal(s);
+    });
+    return m;
+  }
+
+  function advisorTradingDays(){
+    const set = new Set();
+    sales.forEach(s => {
+      if(isReturnDoc(s)) return;
+      const d = businessDateOf(s);
+      if(d) set.add(d);
+    });
+    return Array.from(set).sort();
+  }
+
+  function isoDaysBetween(a, b){
+    return Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 86400000);
+  }
+
+  function shortDay(iso){
+    const d = new Date(iso + "T00:00:00");
+    return isNaN(d) ? iso : d.toLocaleDateString("en-PH", { day: "numeric", month: "short" });
+  }
+
+  function namesList(names, n){
+    const shown = names.slice(0, n);
+    const more = names.length - shown.length;
+    return shown.join(", ") + (more > 0 ? ` and ${more} more` : "");
+  }
+
+  // The month ahead, from the pace of the last fourteen trading days.
+  function monthForecast(){
+    const ym = thisMonthKey();
+    const today = todayISO();
+    const totals = advisorDailyTotals();
+    const past = advisorTradingDays().filter(d => d < today);   // today isn't finished
+    const mtdBefore = Object.keys(totals)
+      .filter(d => monthKeyOf(d) === ym && d < today)
+      .reduce((t, d) => t + totals[d], 0);
+    const mtd = mtdBefore + (totals[today] || 0);
+    const base = { ym, have: past.length, mtd };
+    const recent = past.slice(-14);
+    if(recent.length < ADVISOR_MIN_DAYS) return Object.assign(base, { ready: false });
+
+    const avgOf = (list) => list.reduce((t, d) => t + (totals[d] || 0), 0) / list.length;
+    const avg = avgOf(recent);
+    // How often the shop actually trades. Fourteen trading days spread over
+    // sixteen calendar days means one day in eight it's shut, and the rest of
+    // the month should be counted the same way rather than as every day open.
+    const span = Math.max(recent.length, isoDaysBetween(recent[0], recent[recent.length - 1]) + 1);
+    const openShare = Math.min(1, recent.length / span);
+    const dom = Number(today.slice(8, 10));
+    const daysLeft = (daysInMonth(ym) - dom + 1) * openShare;   // today counted as a full day to come
+    const projected = mtdBefore + avg * daysLeft;
+
+    // A range, not just a number. The two halves of the window give a slow
+    // pace and a fast one; with under two weeks there isn't enough for that,
+    // so a fifth either way stands in, and the figure is labelled early.
+    let low, high;
+    if(recent.length >= 14){
+      const a = avgOf(recent.slice(0, 7)), b = avgOf(recent.slice(7));
+      low = mtdBefore + Math.min(a, b) * daysLeft;
+      high = mtdBefore + Math.max(a, b) * daysLeft;
+    } else {
+      low = mtdBefore + avg * 0.8 * daysLeft;
+      high = mtdBefore + avg * 1.2 * daysLeft;
+    }
+
+    // Gross profit only when enough of the month's sales have a cost behind
+    // them. Guessing the margin of the uncosted part would be inventing it.
+    const g = grossProfitForMonth(ym);
+    const measured = g.revenue - g.unmeasuredRevenue;
+    const measuredShare = g.revenue > 0 ? measured / g.revenue : 0;
+    const marginFrac = measured > 0 ? g.profit / measured : null;
+    const gross = (marginFrac != null && measuredShare >= 0.7) ? projected * marginFrac : null;
+
+    return Object.assign(base, {
+      ready: true, avg, openShare, daysLeft, projected, low, high,
+      gross, marginFrac, measuredShare, be: breakEven(ym),
+      early: recent.length < 14 || past.length < ADVISOR_GOOD_DAYS
+    });
+  }
+
+  // Which days carry the week. Needs three weeks before it means anything.
+  function weekdayPattern(){
+    const totals = advisorDailyTotals();
+    const today = todayISO();
+    const days = advisorTradingDays().filter(d => d < today).slice(-56);
+    if(days.length < 21) return null;
+    const sum = [0,0,0,0,0,0,0], n = [0,0,0,0,0,0,0];
+    days.forEach(d => { const w = new Date(d + "T00:00:00").getDay(); sum[w] += totals[d] || 0; n[w]++; });
+    const avgs = sum.map((t, i) => n[i] >= 2 ? t / n[i] : null);
+    const valid = avgs.filter(v => v != null);
+    if(valid.length < 4) return null;
+    const mean = valid.reduce((a, b) => a + b, 0) / valid.length;
+    if(mean <= 0) return null;
+    let best = null, worst = null;
+    avgs.forEach((v, i) => {
+      if(v == null) return;
+      if(best == null || v > avgs[best]) best = i;
+      if(worst == null || v < avgs[worst]) worst = i;
+    });
+    return { avgs, mean, best, worst, bestRatio: avgs[best] / mean, worstRatio: avgs[worst] / mean };
+  }
+
+  function advisorRevenueByProduct(windowDays){
+    const since = daysAgo(windowDays);
+    const rev = {};
+    let total = 0;
+    sales.forEach(s => {
+      if(!s.timestamp || new Date(s.timestamp) < since) return;
+      const sign = saleSign(s);
+      (s.items || []).forEach(it => {
+        if(!it.productId) return;
+        const v = sign * (Number(it.price) || 0) * (Number(it.qty) || 0);
+        rev[it.productId] = (rev[it.productId] || 0) + v;
+        total += v;
+      });
+    });
+    return { rev, total };
+  }
+
+  // Every recommendation carries a weight; the list is shown heaviest first.
+  // Money leaving today outranks money that might be made next month.
+  function advisorRecommendations(){
+    const recs = [];
+    const add = (level, title, detail, action, weight) => recs.push({ level, title, detail, action: action || null, weight: weight || 0 });
+    const today = todayISO();
+    const days = advisorTradingDays();
+    const firstDay = days[0] || null;
+    const historyDays = firstDay ? isoDaysBetween(firstDay, today) : 0;
+    const f = monthForecast();
+
+    // ---- the data itself -------------------------------------------------
+    const finished = days.filter(d => d < today).length;
+    if(finished < ADVISOR_MIN_DAYS){
+      add("setup", "Not enough sales yet to forecast",
+        `${finished} finished trading day${finished === 1 ? "" : "s"} so far${days.indexOf(today) !== -1 ? ", plus today" : ""}. Forecasts start after ${ADVISOR_MIN_DAYS} and become reliable around ${ADVISOR_GOOD_DAYS}. Ring every sale through the till — each one is evidence, and a sale kept off the till is a hole in every figure here.`,
+        null, 100);
+    }
+
+    const unclosed = dayOpenings.map(o => o.id).filter(d => d && d < today && !closingFor(d)).sort();
+    if(unclosed.length){
+      add("watch", unclosed.length === 1 ? `${shortDay(unclosed[0])} was never closed` : `${unclosed.length} days were never closed`,
+        `No Z-reading was taken${unclosed.length > 1 ? " for " + unclosed.map(shortDay).join(", ") : ""}, so that day's cash was never counted against its sales. The day card only closes today, so this can't be fixed from the till now — if it was only a test day, ignore it. From now on, close each day before you go home.`,
+        { label: "Go to Sales", view: "sales" }, 55);
+    }
+
+    const { rev, total: revTotal } = advisorRevenueByProduct(28);
+    const noCost = products.filter(p => (rev[p.id] || 0) > 0 && !productMargin(p))
+      .sort((a, b) => (rev[b.id] || 0) - (rev[a.id] || 0));
+    if(noCost.length && revTotal > 0){
+      const share = noCost.reduce((t, p) => t + rev[p.id], 0) / revTotal * 100;
+      add(share >= 30 ? "setup" : "watch",
+        `Costs missing on ${noCost.length} line${noCost.length === 1 ? " that sells" : "s that sell"}`,
+        `${Math.round(share)}% of the last four weeks' sales has no cost behind it, so every profit figure leaves it out. Start with the biggest: ${namesList(noCost.map(p => p.name), 3)}.`,
+        { label: "Go to Inventory", view: "inventory" }, 78 + Math.min(20, share / 5));
+    }
+
+    const ym = thisMonthKey();
+    const hasOpex = expenses.some(e => monthKeyOf(e.date) === ym && !isOwnerCash(e));
+    if(!hasOpex && days.length > 0){
+      add("setup", "No running costs recorded this month",
+        "Without rent, electricity and wages the POS can show what the goods earned, but not what the shop earned, and it can't work out a break-even. Record them further down this page.",
+        { label: "Record costs", scroll: "pnlBlock" }, 68);
+    }
+
+    // ---- stock ------------------------------------------------------------
+    const plans = products.map(p => { try{ return orderPlanFor(p); }catch(e){ return null; } }).filter(Boolean);
+
+    const outSelling = plans.filter(pl => pl.v > 0 && pl.stock <= 0)
+      .sort((a, b) => b.v * (Number(b.p.price) || 0) - a.v * (Number(a.p.price) || 0));
+    if(outSelling.length){
+      const lost = outSelling.reduce((t, pl) => t + pl.v * (Number(pl.p.price) || 0), 0);
+      add("act", `Out of stock: ${namesList(outSelling.map(pl => pl.p.name), 3)}`,
+        `${outSelling.length === 1 ? "It was" : "Between them these were"} selling about ${peso(lost)} a day. Every day the shelf is empty, that goes to the store down the road.`,
+        { label: "Open Buying", view: "buying" }, 96 + Math.min(4, lost / 500));
+    }
+
+    const urgent = plans.filter(pl => pl.v > 0 && pl.stock > 0 && pl.cover <= pl.lead + 1)
+      .sort((a, b) => (b.profitPerDay != null ? b.profitPerDay : b.v) - (a.profitPerDay != null ? a.profitPerDay : a.v));
+    if(urgent.length){
+      add("act", `Order today: ${namesList(urgent.map(pl => pl.p.name), 3)}`,
+        urgent.slice(0, 3).map(pl => {
+          const d = Math.floor(pl.cover);
+          const left = d < 1 ? "less than a day of stock" : `about ${d} day${d === 1 ? "" : "s"} of stock`;
+          return `${pl.p.name} has ${left} and the supplier takes ${pl.lead} day${pl.lead === 1 ? "" : "s"}`;
+        }).join("; ") + (urgent.length > 3 ? `; ${urgent.length - 3} more ${urgent.length - 3 === 1 ? "is" : "are"} close behind.` : "."),
+        { label: "Open Buying", view: "buying" }, 91);
+    }
+
+    const due = plans.filter(pl => pl.suggest > 0 && pl.v > 0);
+    if(due.length > urgent.length){
+      const costed = due.filter(pl => pl.cashNeeded != null);
+      const cash = costed.reduce((t, pl) => t + pl.cashNeeded, 0);
+      const missing = due.length - costed.length;
+      const cashText = costed.length === 0
+        ? (due.length === 1 ? "It has no cost recorded, so the cash needed can't be worked out yet." : "None of them has a cost recorded, so the cash needed can't be worked out yet.")
+        : `Bringing them all back to target would take about ${peso(cash)}${missing ? ` — more, since ${missing} ${missing === 1 ? "has" : "have"} no cost recorded` : ""}.`;
+      add("watch", `${due.length} line${due.length === 1 ? " is" : "s are"} due for reordering`,
+        `${cashText} The Buying tab ranks them by what each peso of stock earns, so if cash is short, buy from the top.`,
+        { label: "Open Buying", view: "buying" }, 50);
+    }
+
+    // ---- prices -----------------------------------------------------------
+    // Measured on what a pack really earns in the mix it sells in, so a tingi
+    // line priced low per pack but sold by the stick isn't wrongly flagged.
+    const losing = plans.filter(pl => pl.perUnit != null && pl.perUnit < 0 && pl.v > 0)
+      .sort((a, b) => b.v * Math.abs(b.perUnit) - a.v * Math.abs(a.perUnit));
+    losing.slice(0, 3).forEach(pl => {
+      const fix = pl.m ? priceFromTarget(pl.m.cost, pl.m.opCost) : null;
+      add("act", `${pl.p.name} loses money on every sale`,
+        `After its share of running costs it loses ${peso(Math.abs(pl.perUnit))} a pack — about ${peso(Math.abs(pl.perUnit * pl.v * 30))} a month at today's pace.${fix ? ` At your target margin it would sell for ${peso(fix.rounded)}; it sells for ${peso(pl.p.price)} now.` : ""}`,
+        { label: "Go to Inventory", view: "inventory" }, 86);
+    });
+
+    // ---- the month --------------------------------------------------------
+    if(f.ready && f.be && f.be.target){
+      if(f.projected < f.be.target){
+        const need = Math.max(0, f.be.target - f.mtd) / Math.max(1, f.daysLeft);
+        add("act", `Heading for about ${peso(f.be.target - f.projected)} short of break-even`,
+          `This month needs ${peso(f.be.target)} in sales to cover its running costs. The rest of the month would need about ${peso(need)} a trading day; the shop is doing ${peso(f.avg)}.`,
+          { label: "See break-even", scroll: "breakEvenBlock" }, 88);
+      }
+    }
+
+    // ---- what's moving ----------------------------------------------------
+    const moving = plans.filter(pl => pl.vd && pl.vd.r28 && pl.vd.r28.rate > 0 && (pl.vd.trend === "rising" || pl.vd.trend === "falling"))
+      .map(pl => ({ pl, ratio: pl.vd.r7.rate / pl.vd.r28.rate }));
+    const rising = moving.filter(x => x.pl.vd.trend === "rising").sort((a, b) => b.ratio - a.ratio);
+    const falling = moving.filter(x => x.pl.vd.trend === "falling").sort((a, b) => a.ratio - b.ratio);
+    if(rising.length){
+      add("watch", `Selling faster: ${namesList(rising.map(x => x.pl.p.name), 3)}`,
+        rising.slice(0, 3).map(x => {
+          const c = isFinite(x.pl.cover) ? `${Math.floor(x.pl.cover)} days of stock left` : "stock not counted";
+          return `${x.pl.p.name} up ${Math.round((x.ratio - 1) * 100)}% this week, ${c}`;
+        }).join("; ") + ". Make sure the shelf keeps up.",
+        { label: "Open Buying", view: "buying" }, 60);
+    }
+    if(falling.length){
+      add("watch", `Slowing down: ${namesList(falling.map(x => x.pl.p.name), 3)}`,
+        falling.slice(0, 3).map(x => `${x.pl.p.name} down ${Math.round((1 - x.ratio) * 100)}% this week`).join("; ") +
+        ". Check the price and where it sits on the shelf before ordering the usual amount.",
+        { label: "Open Buying", view: "buying" }, 44);
+    }
+
+    // Stock that hasn't sold. "Never sold" only means something once the till
+    // has been recording long enough to have seen it sell.
+    let tied = 0, deadN = 0;
+    products.forEach(p => {
+      const stock = Number(p.stock) || 0;
+      if(stock <= 0 || velocityFor(p.id) > 0) return;
+      const last = lastSoldDaysAgo(p.id);
+      const dead = last != null ? last >= DEAD_DAYS : historyDays >= DEAD_DAYS;
+      if(!dead) return;
+      deadN++;
+      const m = productMargin(p);
+      if(m) tied += m.cost * stock;
+    });
+    if(deadN){
+      add("watch", `${deadN} line${deadN === 1 ? "" : "s"} haven't sold in ${DEAD_DAYS} days`,
+        `${tied > 0 ? peso(tied) + " of cash is sitting on the shelf. " : ""}Mark them down, bundle them with a fast seller, or stop reordering them — the money is worth more as stock that moves.`,
+        { label: "Open Buying", view: "buying" }, 40);
+    }
+
+    const wp = weekdayPattern();
+    if(wp && wp.bestRatio >= 1.2){
+      const before = ADVISOR_DAYS[(wp.best + 6) % 7];
+      add("info", `${ADVISOR_DAYS[wp.best]} is your busiest day`,
+        `It brings about ${wp.bestRatio.toFixed(1)}× an ordinary day; ${ADVISOR_DAYS[wp.worst]} is the quietest at ${Math.round(wp.worstRatio * 100)}% of one. Restock the fast lines on ${before}.`,
+        null, 30);
+    }
+
+    // ---- customers and deliveries -------------------------------------------
+    try{
+      const ca = customerAnalytics();
+      if(ca.peak != null && finished >= ADVISOR_MIN_DAYS){
+        const share = Math.round(ca.hourCount[ca.peak] / Math.max(1, ca.visits28) * 100);
+        if(share >= 12){
+          add("info", `Your busiest hour is ${hourLabel(ca.peak)}–${hourLabel((ca.peak + 1) % 24)}`,
+            `${share}% of the last four weeks' sales happen in that hour. Have the fast lines full and change in the drawer before it starts.`,
+            { label: "See customers", scroll: "customersBlock" }, 29);
+        }
+      }
+      if(ca.lapsed.length){
+        add("watch", `${ca.lapsed.length} regular${ca.lapsed.length === 1 ? " hasn't" : "s haven't"} been back in two weeks`,
+          `${namesList(ca.lapsed.map(r => r.name), 3)}. A word next time you see them — or a text, if they gave you their number — costs nothing, and a regular who drifts to another store rarely comes back on their own.`,
+          { label: "See customers", scroll: "customersBlock" }, 42);
+        // Names stay in the shop: the copy that goes to Claude says how many.
+        recs[recs.length - 1].shareDetail = "Names withheld. A regular who drifts to another store rarely comes back on their own.";
+      }
+      const dr = deliveryReport();
+      const short = dr.towns.filter(t => t.costKnown && t.orders >= 3 && t.fees - t.cost < 0);
+      if(short.length){
+        const gap = short.reduce((t, x) => t + (x.cost - x.fees), 0);
+        add("watch", `Delivery fees don't cover the trips to ${namesList(short.map(t => t.town), 2)}`,
+          `Over four weeks the fees there fell about ${peso(gap)} short of what the rides cost. Raise the fee, set a minimum order, or group those deliveries into one run.`,
+          { label: "See deliveries", scroll: "deliveryReportBlock" }, 43);
+      }
+    }catch(e){ console.warn("customer/delivery advice skipped", e); }
+
+    if(!recs.some(r => r.level === "act" || r.level === "setup" || r.level === "watch")){
+      add("good", "Nothing needs you today",
+        "Nothing is out, nothing is about to run out, and no line is losing money. The forecast above is the thing to keep an eye on.", null, 0);
+    }
+    return recs.sort((a, b) => b.weight - a.weight);
+  }
+
+  const ADVISOR_LEVEL = {
+    act:   { label: "Act now",   fg: "var(--danger)",     bg: "var(--danger-tint)" },
+    setup: { label: "Fix data",  fg: "var(--accent)",     bg: "var(--accent-tint)" },
+    watch: { label: "Watch",     fg: "var(--info)",       bg: "var(--info-tint)" },
+    info:  { label: "Pattern",   fg: "var(--text-muted)", bg: "var(--neutral-tint)" },
+    good:  { label: "All clear", fg: "var(--primary)",    bg: "var(--primary-tint)" }
+  };
+
+  function renderAdvisor(){
+    const block = document.getElementById("advisorBlock");
+    if(!block) return;
+    // Costs and margins run through all of this, and those are the owner's.
+    if(currentUserRole !== "owner"){ block.style.display = "none"; return; }
+    block.style.display = "block";
+
+    const f = monthForecast();
+    const monthName = new Date(f.ym + "-01T00:00:00").toLocaleDateString("en-PH", { month: "long" });
+    let fh = "";
+    if(!f.ready){
+      fh = `<div style="font-size:12px;color:var(--text-muted);">${escapeHtml(monthName)} so far</div>
+        <div style="font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;">${peso(f.mtd)}</div>
+        <div style="font-size:12.5px;color:var(--text-muted);line-height:1.5;margin-top:4px;">A forecast needs ${ADVISOR_MIN_DAYS} finished trading days; there ${f.have === 1 ? "is" : "are"} ${f.have}.</div>`;
+    } else {
+      let be = "";
+      if(f.be && f.be.target){
+        const ok = f.projected >= f.be.target;
+        be = `<div style="font-size:12.5px;margin-top:6px;color:${ok ? "var(--primary)" : "var(--danger)"};font-weight:700;">${ok
+          ? `Clears break-even (${peso(f.be.target)}) by about ${peso(f.projected - f.be.target)}`
+          : `Short of break-even (${peso(f.be.target)}) by about ${peso(f.be.target - f.projected)}`}</div>`;
+      }
+      fh = `<div style="font-size:12px;color:var(--text-muted);">Sales forecast for ${escapeHtml(monthName)}${f.early ? " · early estimate" : ""}</div>
+        <div style="font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;">${peso(f.projected)}</div>
+        <div style="font-size:12.5px;color:var(--text-muted);line-height:1.55;font-variant-numeric:tabular-nums;">
+          likely ${peso(f.low)} – ${peso(f.high)} · ${peso(f.mtd)} so far · ${peso(f.avg)} a trading day<br>
+          ${f.gross != null
+            ? `Gross profit about ${peso(f.gross)} (${Math.round(f.marginFrac * 100)}% margin)`
+            : `Gross profit: not enough costs recorded to estimate (${Math.round(f.measuredShare * 100)}% of sales costed)`}
+        </div>${be}
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">From the last ${Math.min(14, f.have)} trading days${f.openShare < 0.99 ? `, open about ${Math.round(f.openShare * 7)} days a week` : ""}.</div>`;
+    }
+    $("advisorForecast").innerHTML = fh;
+
+    const recs = advisorRecommendations();
+    $("advisorList").innerHTML = recs.map((r, i) => {
+      const lv = ADVISOR_LEVEL[r.level] || ADVISOR_LEVEL.info;
+      return `<div style="padding:11px 0;border-top:1px solid var(--border);">
+        <span style="display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:${lv.bg};color:${lv.fg};">${lv.label}</span>
+        <div style="font-size:14px;font-weight:800;margin-top:5px;line-height:1.35;">${escapeHtml(r.title)}</div>
+        <div style="font-size:12.5px;color:var(--text-muted);line-height:1.55;margin-top:3px;">${escapeHtml(r.detail)}</div>
+        ${r.action ? `<button type="button" class="advisor-go" data-i="${i}" style="background:none;border:0;padding:6px 0 0;color:var(--primary);font-weight:800;font-size:12.5px;cursor:pointer;">${escapeHtml(r.action.label || "Open")} →</button>` : ""}
+      </div>`;
+    }).join("");
+    Array.prototype.forEach.call(document.querySelectorAll("#advisorList .advisor-go"), b => {
+      b.onclick = () => {
+        const a = recs[Number(b.getAttribute("data-i"))].action;
+        if(a.view) switchView(a.view);
+        if(a.scroll){
+          const el = document.getElementById(a.scroll);
+          if(el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      };
+    });
+  }
+
+  // ---------- Ask Claude: the shop in one page of text ----------
+  // A real model needs somewhere to keep its key that nobody can read, and
+  // this app has nowhere like that — every line of it is public. So instead
+  // the POS writes everything a good adviser would want to know into plain
+  // text, and the owner hands it to Claude on their own account. No server,
+  // no bill, nothing sent anywhere the owner didn't choose to send it.
+  function advisorSummaryText(){
+    const L = [];
+    const today = todayISO();
+    const f = monthForecast();
+    const days = advisorTradingDays();
+    const totals = advisorDailyTotals();
+    const shop = (designSettings && designSettings.storeName) || "the shop";
+    const since7 = daysAgo(7), since28 = daysAgo(28);
+    const inWin = (s, since) => s.timestamp && new Date(s.timestamp) >= since;
+    const sum = (list) => list.reduce((t, s) => t + signedTotal(s), 0);
+    const s7 = sales.filter(s => inWin(s, since7)), s28 = sales.filter(s => inWin(s, since28));
+    const atv = averageTransaction(s28);
+    const inv = inventoryValue();
+    const plans = products.map(p => { try{ return orderPlanFor(p); }catch(e){ return null; } }).filter(Boolean);
+    const planById = {}; plans.forEach(pl => { planById[pl.p.id] = pl; });
+    const { rev } = advisorRevenueByProduct(28);
+    const n = (x, d) => (x == null || !isFinite(x)) ? "—" : Number(x).toFixed(d == null ? 1 : d);
+
+    L.push("You are advising the owner of a small sari-sari / grocery store. Below is a summary exported from the shop's point-of-sale system. Use only these figures. Say plainly when the data is too thin to support a conclusion. Give specific, practical actions a small store can take this week, most valuable first. The owner reads on a phone, so keep it short. Answer in English unless asked for Hiligaynon or Tagalog.");
+    L.push("");
+    L.push(`SHOP: ${shop} — sari-sari / grocery store, Batad, Iloilo, Philippines. Prices in Philippine pesos (PHP). BIR ${bizSettings && bizSettings.taxType === "vat" ? "VAT" : "non-VAT"} registered.`);
+    L.push(`EXPORTED: ${today}. This contains the owner's costs and margins — private.`);
+    L.push("");
+    L.push("SALES");
+    L.push(`- Trading days recorded: ${days.length}${days.length ? ` (${days[0]} to ${days[days.length - 1]})` : ""}.`);
+    L.push(`- Last 7 days: PHP ${n(sum(s7), 0)} across ${s7.filter(s => !isReturnDoc(s)).length} sales. Last 28 days: PHP ${n(sum(s28), 0)}.`);
+    if(atv != null) L.push(`- Average spend per customer (28 days): PHP ${n(atv, 2)}.`);
+    const wp = weekdayPattern();
+    if(wp) L.push(`- Average by weekday: ${wp.avgs.map((v, i) => v == null ? null : `${ADVISOR_DAYS[i].slice(0, 3)} ${n(v, 0)}`).filter(Boolean).join(", ")}.`);
+    L.push(`- This month so far: PHP ${n(f.mtd, 0)}.${f.ready ? ` Forecast for the month: PHP ${n(f.projected, 0)} (likely ${n(f.low, 0)}–${n(f.high, 0)})${f.early ? ", early estimate" : ""}.` : ` Not enough trading days to forecast yet.`}`);
+    const last14 = days.filter(d => d < today).slice(-14);
+    if(last14.length) L.push(`- Daily sales, last ${last14.length} trading days: ${last14.map(d => `${d.slice(5)} ${n(totals[d], 0)}`).join(", ")}.`);
+    L.push("");
+
+    L.push("PROFIT (this month)");
+    const pnl = monthlyPnl(thisMonthKey());
+    L.push(`- Gross margin: ${pnl.grossPct != null ? n(pnl.grossPct) + "%" : "unknown"}${pnl.unmeasuredRevenue > 0 ? ` (PHP ${n(pnl.unmeasuredRevenue, 0)} of sales has no cost recorded and is left out)` : ""}.`);
+    const cats = Object.keys(pnl.byCat || {});
+    L.push(`- Running costs recorded: PHP ${n(pnl.opex, 0)}${cats.length ? " — " + cats.map(c => { const def = EXPENSE_CATEGORIES.find(x => x.id === c); return `${def ? def.label : c} ${n(pnl.byCat[c], 0)}`; }).join(", ") : " (none recorded)"}.`);
+    L.push(`- Net profit so far: ${pnl.opex > 0 ? "PHP " + n(pnl.net, 0) : "unknown until running costs are recorded"}. Owner drawings: PHP ${n(pnl.draws, 0)}.`);
+    const be = breakEven(thisMonthKey());
+    L.push(`- Break-even sales this month: ${be.target ? "PHP " + n(be.target, 0) + ` (reached ${n(be.progress, 0)}% so far)` : "cannot be worked out yet"}.`);
+    L.push(`- Stock on hand: PHP ${n(inv.atCost, 0)} at cost, PHP ${n(inv.atRetail, 0)} at shelf price (${inv.uncosted} of ${inv.total} products have no cost recorded).`);
+    L.push("");
+
+    const ymk = thisMonthKey();
+    const cs = cashSummary(ymk + "-01", ymk + "-31");
+    L.push("CASH (this month — drawer, GCash and owner's pocket together)");
+    L.push(`- In PHP ${n(cs.in, 0)}, out PHP ${n(cs.out, 0)}, net PHP ${n(cs.net, 0)}. ` +
+      Object.keys(cs.by).map(k => `${CASH_LABELS[k] || k} ${n(cs.by[k], 0)}`).join(", ") + ".");
+    const bs = balanceSheet();
+    if(bs){
+      L.push(`- Balance sheet (from ${bs.op.date}): assets PHP ${n(bs.totalAssets, 0)}, owed PHP ${n(bs.totalLiabilities, 0)}, worth PHP ${n(bs.equity, 0)}. Records say it should be worth PHP ${n(bs.expected, 0)} (difference ${n(bs.gap, 0)}; sales with no cost behind them since then: ${n(bs.unmeasured, 0)}).`);
+    } else {
+      L.push("- No balance sheet: the owner hasn't set a starting point yet.");
+    }
+    L.push("");
+    const ca = customerAnalytics();
+    L.push("CUSTOMERS (last 4 weeks; names left out on purpose)");
+    L.push(`- ${ca.visits28} sales, average spend PHP ${ca.visits28 ? n(ca.total28 / ca.visits28, 2) : "—"}. Busiest hour: ${ca.peak != null ? hourLabel(ca.peak) : "—"}. Sales by hour: ${ca.hourCount.map((c, h) => c ? `${hourLabel(h)} ${c}` : null).filter(Boolean).join(", ")}.`);
+    L.push(`- Tagged regulars: ${ca.regularsActive} bought, ${ca.repeat} more than once, ${ca.lapsed.length} not back in two weeks. ${Math.round(ca.knownShare * 100)}% of sales value from tagged regulars.`);
+    L.push(`- Online (2 months): ${ca.onlineCustomers} customers, ${ca.onlineRepeat} ordered more than once.${ca.towns.length ? " Deliveries by area: " + ca.towns.map(([t, c]) => `${t} ${c}`).join(", ") + "." : ""}`);
+    const dr = deliveryReport();
+    if(dr.total){
+      L.push(`- Deliveries (4 weeks): ${dr.done} delivered, ${dr.cancelled} cancelled, typical order-to-door ${minutesText(dr.medPlaced)}. ` +
+        dr.towns.map(t => `${t.town}: ${t.orders} orders, fees ${n(t.fees, 0)}${t.costKnown ? ", trip cost about " + n(t.cost, 0) : ""}`).join("; ") + ".");
+    }
+    L.push("");
+
+    const top = products.filter(p => (rev[p.id] || 0) > 0).sort((a, b) => rev[b.id] - rev[a.id]).slice(0, 25);
+    L.push("TOP PRODUCTS, last 28 days (name | sales PHP | packs/day | trend | stock | days of cover | margin % | price)");
+    if(!top.length) L.push("- no product sales in the last 28 days");
+    top.forEach(p => {
+      const pl = planById[p.id] || {};
+      const m = productMargin(p);
+      L.push(`- ${p.name} | ${n(rev[p.id], 0)} | ${n(pl.v, 2)} | ${pl.vd ? pl.vd.trend : "—"} | ${n(Number(p.stock), 1)} | ${isFinite(pl.cover) ? n(pl.cover, 0) : "—"} | ${m && m.marginPct != null ? n(m.marginPct) : "no cost"} | ${n(p.price, 2)}`);
+    });
+    L.push("");
+
+    L.push("WHAT THE POS ITSELF FLAGGED");
+    const recs = advisorRecommendations().filter(r => r.level !== "good");
+    if(!recs.length) L.push("- nothing");
+    recs.forEach(r => L.push(`- [${(ADVISOR_LEVEL[r.level] || {}).label || r.level}] ${r.title}. ${r.shareDetail || r.detail}`));
+    L.push("");
+
+    const due = plans.filter(pl => pl.suggest > 0 && pl.v > 0).slice(0, 25);
+    L.push("SUGGESTED REORDER (POS calculation)");
+    if(!due.length) L.push("- nothing due");
+    due.forEach(pl => L.push(`- ${pl.p.name}: order ${pl.suggest}${pl.cashNeeded != null ? ` (about PHP ${n(pl.cashNeeded, 0)})` : ""}, ${isFinite(pl.cover) ? n(pl.cover, 0) + " days of cover now" : ""}`));
+    L.push("");
+    L.push("MY QUESTION:");
+    L.push("");
+    return L.join("\n");
+  }
+
+  async function shareAdvisorSummary(){
+    const text = advisorSummaryText();
+    // On a phone the share sheet can hand it straight to the Claude app.
+    if(navigator.share){
+      try{ await navigator.share({ title: "Shop summary", text }); return; }
+      catch(e){ if(e && e.name === "AbortError") return; }
+    }
+    copyAdvisorSummary(text);
+  }
+
+  async function copyAdvisorSummary(text){
+    text = text || advisorSummaryText();
+    try{
+      await navigator.clipboard.writeText(text);
+      showToast("Summary copied — paste it into Claude and type your question at the end");
+      return;
+    }catch(e){ /* fall through to the manual box */ }
+    const box = $("advisorSummaryBox");
+    box.style.display = "block";
+    box.value = text;
+    box.focus();
+    box.select();
+    showToast("Press and hold the text, then Copy");
+  }
+
+
+  // =====================================================================
+  // CASH FLOW AND THE BALANCE SHEET
+  // =====================================================================
+  // The P&L says whether the shop made money. This says where the money
+  // went, and what the shop is worth. They differ more than people expect:
+  // a month can show a profit while the cash sits on the shelf as stock, or in
+  // a supplier's pocket as an advance.
+  //
+  // The shop is treated as one pot — drawer, GCash and the owner's pocket
+  // together — because in a sari-sari store that is how the money actually
+  // moves, and a statement that pretends otherwise just hides where it went.
+  let openingPosition = null;   // settings/openingPosition — owner only
+
+  function supplierPaymentSign(p){ return Number(p && p.sign) === -1 ? -1 : 1; }
+
+  // Every peso in and out, with the date it moved.
+  function cashMovements(){
+    const rows = [];
+    sales.forEach(s => {
+      const st = settlementOf(s);
+      // On the book, or a return where nothing was handed back: no money moved.
+      if(st === "utang" || st === "none") return;
+      const d = businessDateOf(s);
+      if(d) rows.push({ date: d, kind: "sales", amount: signedTotal(s) });
+    });
+    // A delivery fee is paid by the customer but isn't part of the sale record,
+    // so it's picked up from the order itself when the order is completed.
+    orders.forEach(o => {
+      if(o.status !== "completed" || o.method !== "delivery") return;
+      const fee = Number(o.deliveryFee) || 0;
+      if(fee <= 0) return;
+      const when = o.completedAt || o.updatedAt;
+      const d = when ? dayKeyOf(when) : null;
+      if(d) rows.push({ date: d, kind: "fees", amount: fee });
+    });
+    customerPayments.forEach(p => {
+      if(p.date) rows.push({ date: p.date, kind: "collections", amount: Number(p.amount) || 0 });
+    });
+    supplierPayments.forEach(p => {
+      if(p.date) rows.push({ date: p.date, kind: "suppliers", amount: -supplierPaymentSign(p) * (Number(p.amount) || 0) });
+    });
+    // Paid at the door: recorded on the delivery itself, with no separate payment.
+    purchases.forEach(p => {
+      if(p.terms !== "cod" || isOrderDoc(p) || isCreditDoc(p)) return;
+      const paid = Number(p.paidAmount) || 0;
+      if(paid > 0 && p.date) rows.push({ date: p.date, kind: "suppliers", amount: -paid });
+    });
+    expenses.forEach(e => {
+      if(!e.date) return;
+      const v = expenseValue(e);
+      if(e.kind === "ownerAdvance") rows.push({ date: e.date, kind: "ownerIn", amount: v });
+      else if(e.kind === "ownerDraw") rows.push({ date: e.date, kind: "ownerOut", amount: -v });
+      else rows.push({ date: e.date, kind: "costs", amount: -v });
+    });
+    return rows;
+  }
+
+  // The POS keeps the most recent 2,000 sales on the phone. If it's holding
+  // that many, anything older than the oldest one is incomplete and is left
+  // out rather than shown as a quiet week.
+  function salesHistoryStart(){
+    if(sales.length < 2000) return null;
+    let oldest = null;
+    sales.forEach(s => { const d = businessDateOf(s); if(d && (!oldest || d < oldest)) oldest = d; });
+    return oldest;
+  }
+
+  const CASH_LABELS = {
+    sales: "Sales", fees: "Delivery fees", collections: "Collected on accounts", ownerIn: "Owner put in",
+    suppliers: "Paid to suppliers", costs: "Running costs", ownerOut: "Owner took out"
+  };
+
+  function cashSummary(fromISO, toISO){
+    const out = { in: 0, out: 0, net: 0, by: {} };
+    cashMovements().forEach(r => {
+      if(r.date < fromISO || r.date > toISO) return;
+      out.by[r.kind] = (out.by[r.kind] || 0) + r.amount;
+      if(r.amount >= 0) out.in += r.amount; else out.out -= r.amount;
+    });
+    out.net = out.in - out.out;
+    return out;
+  }
+
+  function cashFlowWeeks(n){
+    const weeks = [];
+    const start = startOfWeek(new Date());
+    const floor = salesHistoryStart();
+    for(let i = 0; i < n; i++){
+      const from = new Date(start); from.setDate(from.getDate() - 7 * i);
+      const to = new Date(from); to.setDate(to.getDate() + 6);
+      const f = dateKey(from), t = dateKey(to);
+      if(floor && t < floor) break;
+      weeks.push(Object.assign({ from: f, to: t, current: i === 0 }, cashSummary(f, t)));
+    }
+    return weeks;
+  }
+
+  // Gross profit over any stretch of days — the same sum as the monthly one.
+  function grossProfitBetween(fromISO, toISO){
+    let revenue = 0, profit = 0, unmeasuredRevenue = 0;
+    sales.forEach(s => {
+      const d = businessDateOf(s);
+      if(!d || d < fromISO || d > toISO) return;
+      const sign = saleSign(s);
+      (s.items || []).forEach(it => {
+        const qty = sign * (Number(it.qty) || 0);
+        const net = netOfTax(it.price) * qty;
+        revenue += net;
+        const packCost = it.productId ? costAtDate(it.productId, s.timestamp) : null;
+        if(packCost == null || !isFinite(packCost) || packCost <= 0){ unmeasuredRevenue += net; return; }
+        const perPack = (it.unit === "sub" && Number(it.perPack)) ? Number(it.perPack) : 1;
+        profit += net - (packCost / perPack) * qty;
+      });
+    });
+    return { revenue, profit, unmeasuredRevenue };
+  }
+
+  function balanceSheet(){
+    const op = openingPosition;
+    if(!op || !op.date) return null;
+    const today = todayISO();
+    const num = (x) => Number(x) || 0;
+    const moves = cashMovements().filter(r => r.date >= op.date && r.date <= today);
+    const cash = num(op.cash) + moves.reduce((t, r) => t + r.amount, 0);
+    const inv = inventoryValue();
+    const owedToUs = typeof totalOwedToUs === "function" ? totalOwedToUs() : 0;
+    const paidAhead = suppliers.reduce((t, s) => t + Math.max(0, supplierPaidAhead(s.id)), 0);
+    const owedToSuppliers = suppliers.reduce((t, s) => t + supplierBalance(s.id), 0);
+    const assets = [
+      { label: "Cash — drawer, GCash and bank", value: cash, note: "Your opening figure plus every peso in and out since. Count the drawer and GCash to check it." },
+      { label: "Stock on the shelves, at cost", value: inv.atCost, note: inv.uncosted ? `${inv.uncosted} product${inv.uncosted === 1 ? " has" : "s have"} no cost recorded and ${inv.uncosted === 1 ? "is" : "are"} left out.` : "" },
+      { label: "Owed to you by customers", value: owedToUs },
+      { label: "Paid ahead to suppliers", value: paidAhead },
+      { label: "Equipment", value: num(op.equipment), note: "As you entered it. Not reduced for wear." },
+      { label: "Other things the shop owns", value: num(op.otherAssets) }
+    ].filter(a => Math.abs(a.value) > 0.005 || a.label.indexOf("Cash") === 0 || a.label.indexOf("Stock") === 0);
+    const liabilities = [
+      { label: "Owed to suppliers", value: owedToSuppliers },
+      { label: "Loans", value: num(op.loans), note: "Update this when a loan is paid down." }
+    ].filter(l => Math.abs(l.value) > 0.005);
+    const totalAssets = assets.reduce((t, a) => t + a.value, 0);
+    const totalLiabilities = liabilities.reduce((t, l) => t + l.value, 0);
+    const equity = totalAssets - totalLiabilities;
+
+    // What the records say the shop should be worth, from the opening figure.
+    // The difference is the most useful number on the page: it is stock that
+    // walked out, sales that were never rung up, deliveries never recorded.
+    const openingEquity = num(op.cash) + num(op.stockAtCost) + num(op.equipment) + num(op.otherAssets)
+                        - num(op.payables) - num(op.loans);
+    const g = grossProfitBetween(op.date, today);
+    let opex = 0, ownerIn = 0, ownerOut = 0;
+    expenses.forEach(e => {
+      if(!e.date || e.date < op.date || e.date > today) return;
+      const v = expenseValue(e);
+      if(e.kind === "ownerAdvance") ownerIn += v;
+      else if(e.kind === "ownerDraw") ownerOut += v;
+      else opex += v;
+    });
+    // A delivery fee is income the sale record doesn't carry, so it's added
+    // here; left out, every fee would turn up as an unexplained difference.
+    const fees = moves.filter(r => r.kind === "fees").reduce((t, r) => t + r.amount, 0);
+    const netProfit = g.profit + fees - opex;
+    const expected = openingEquity + netProfit + ownerIn - ownerOut;
+    return {
+      op, assets, liabilities, totalAssets, totalLiabilities, equity,
+      openingEquity, netProfit, ownerIn, ownerOut, expected,
+      gap: equity - expected, unmeasured: g.unmeasuredRevenue,
+      sinceDays: isoDaysBetween(op.date, today)
+    };
+  }
+
+  function renderCashFlow(){
+    const el = document.getElementById("cashFlowBody");
+    if(!el) return;
+    const ym = thisMonthKey();
+    const m = cashSummary(ym + "-01", ym + "-31");
+    const weeks = cashFlowWeeks(8);
+    const maxAbs = Math.max(1, ...weeks.map(w => Math.abs(w.net)));
+    const inKinds = ["sales", "fees", "collections", "ownerIn"];
+    const outKinds = ["suppliers", "costs", "ownerOut"];
+    const line = (k) => {
+      const v = m.by[k] || 0;
+      if(Math.abs(v) < 0.005) return "";
+      return `<div class="report-row"><span>${CASH_LABELS[k]}</span><span>${v < 0 ? "−" : ""}${peso(Math.abs(v))}</span></div>`;
+    };
+    const monthName = new Date(ym + "-01T00:00:00").toLocaleDateString("en-PH", { month: "long" });
+    let html = `
+      <div style="font-size:12px;color:var(--text-muted);">${escapeHtml(monthName)} so far</div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin:4px 0 10px;font-variant-numeric:tabular-nums;">
+        <div><div style="font-size:11px;color:var(--text-muted);">Came in</div><div style="font-size:19px;font-weight:800;">${peso(m.in)}</div></div>
+        <div><div style="font-size:11px;color:var(--text-muted);">Went out</div><div style="font-size:19px;font-weight:800;">${peso(m.out)}</div></div>
+        <div><div style="font-size:11px;color:var(--text-muted);">Left over</div><div style="font-size:19px;font-weight:800;">${m.net < 0 ? "−" : ""}${peso(Math.abs(m.net))}</div></div>
+      </div>
+      ${inKinds.map(line).join("")}${outKinds.map(line).join("")}`;
+
+    if(weeks.length){
+      html += `<div style="font-size:12px;font-weight:800;margin:14px 0 6px;">Week by week</div>
+        <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;">
+        <thead><tr style="color:var(--text-muted);text-align:right;">
+          <th style="text-align:left;padding:5px 4px 5px 0;font-weight:700;">Week of</th>
+          <th style="padding:5px 4px;font-weight:700;">In</th><th style="padding:5px 4px;font-weight:700;">Out</th>
+          <th style="padding:5px 4px;font-weight:700;">Net</th><th style="width:24%;"></th></tr></thead><tbody>` +
+        weeks.map(w => {
+          const pct = Math.round(Math.abs(w.net) / maxAbs * 50);
+          const pos = w.net >= 0;
+          // Money in to the right in blue, money out to the left in amber, from
+          // a centre line: direction reads before any number does.
+          const bar = `<div style="position:relative;height:10px;">
+            <div style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--border);"></div>
+            ${pct > 0 ? `<div style="position:absolute;top:0;height:10px;border-radius:${pos ? "0 4px 4px 0" : "4px 0 0 4px"};background:${pos ? "var(--info)" : "var(--accent)"};${pos ? "left:50%" : "right:50%"};width:${pct}%;"></div>` : ""}
+          </div>`;
+          return `<tr style="border-top:1px solid var(--border);">
+            <td style="padding:7px 4px 7px 0;white-space:nowrap;">${escapeHtml(shortDay(w.from))}${w.current ? " <span style='color:var(--text-muted);'>(now)</span>" : ""}</td>
+            <td style="padding:7px 4px;text-align:right;white-space:nowrap;">${peso(w.in)}</td>
+            <td style="padding:7px 4px;text-align:right;white-space:nowrap;">${peso(w.out)}</td>
+            <td style="padding:7px 4px;text-align:right;font-weight:800;white-space:nowrap;">${w.net < 0 ? "−" : ""}${peso(Math.abs(w.net))}</td>
+            <td style="padding:7px 0 7px 6px;">${bar}</td></tr>`;
+        }).join("") + `</tbody></table></div>
+        <div style="display:flex;gap:14px;font-size:11px;color:var(--text-muted);margin-top:6px;">
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--info);vertical-align:-1px;"></span> more came in than went out</span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--accent);vertical-align:-1px;"></span> more went out</span>
+        </div>`;
+    }
+    const floor = salesHistoryStart();
+    html += `<p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:10px 0 0;">Counts every peso the shop took and paid, whether through the drawer, GCash or your own pocket. Sales on the book count when they're paid, not when they're made.${floor ? ` Weeks before ${escapeHtml(shortDay(floor))} are left out — older sales aren't kept on the phone.` : ""}</p>`;
+    el.innerHTML = html;
+  }
+
+  function renderBalanceSheet(){
+    const el = document.getElementById("balanceSheetBody");
+    if(!el) return;
+    const b = balanceSheet();
+    if(!b){
+      el.innerHTML = `<p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 10px;">A balance sheet needs a starting point: what the shop had and owed on one particular day. Enter it once — cash, stock, equipment, any loans — and from then on the POS works out the rest from what it records.</p>
+        <button type="button" class="btn btn-primary" id="openingSetBtn">Set the starting point</button>`;
+      $("openingSetBtn").onclick = () => openOpeningSheet();
+      return;
+    }
+    const row = (x, strong) => `<div class="report-row"${strong ? ` style="font-weight:800;"` : ""}><span>${escapeHtml(x.label)}${x.note ? `<br><span style="font-size:11px;color:var(--text-muted);font-weight:400;">${escapeHtml(x.note)}</span>` : ""}</span><span style="white-space:nowrap;">${x.value < 0 ? "−" : ""}${peso(Math.abs(x.value))}</span></div>`;
+    const gapAbs = Math.abs(b.gap);
+    const small = gapAbs <= Math.max(200, Math.abs(b.equity) * 0.02);
+    el.innerHTML = `
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">As of today · counted from ${escapeHtml(shortDay(b.op.date))}</div>
+      <div style="font-size:12px;font-weight:800;margin:6px 0 2px;">What the shop has</div>
+      ${b.assets.map(a => row(a)).join("")}
+      ${row({ label: "Total", value: b.totalAssets }, true)}
+      <div style="font-size:12px;font-weight:800;margin:12px 0 2px;">What the shop owes</div>
+      ${b.liabilities.length ? b.liabilities.map(l => row(l)).join("") : `<div class="report-row"><span>Nothing</span><span>${peso(0)}</span></div>`}
+      ${row({ label: "Total", value: b.totalLiabilities }, true)}
+      <div class="report-row total" style="margin-top:8px;"><span>What the shop is worth to you</span><span>${b.equity < 0 ? "−" : ""}${peso(Math.abs(b.equity))}</span></div>
+
+      <div style="font-size:12px;font-weight:800;margin:14px 0 2px;">Does it add up?</div>
+      ${row({ label: "Worth at the start", value: b.openingEquity })}
+      ${row({ label: "Profit since, after running costs and with delivery fees", value: b.netProfit })}
+      ${Math.abs(b.ownerIn) > 0.005 ? row({ label: "You put in", value: b.ownerIn }) : ""}
+      ${Math.abs(b.ownerOut) > 0.005 ? row({ label: "You took out", value: -b.ownerOut }) : ""}
+      ${row({ label: "What the records say it should be worth", value: b.expected }, true)}
+      <div class="report-row" style="color:${small ? "var(--primary)" : "var(--danger)"};font-weight:800;"><span>${small ? "Within a small margin — the records hold together" : (b.gap < 0 ? "Worth less than the records say by" : "Worth more than the records say by")}</span><span>${small ? "" : peso(gapAbs)}</span></div>
+      ${small ? "" : `<p style="font-size:12px;color:var(--text-muted);line-height:1.55;margin:6px 0 0;">${b.gap < 0
+        ? "Something left the shop without being recorded: stock that walked out, a sale not rung up, a cost not entered, or a delivery paid for but never recorded. A physical count will show whether it's the stock."
+        : "More is here than the records explain: usually sales of products with no cost recorded, a delivery not entered, or the opening figures set low."}${b.unmeasured > 0.005 ? ` Sales with no cost behind them since the start: ${peso(b.unmeasured)} — that alone moves this line.` : ""}</p>`}
+      <button type="button" class="btn btn-secondary" id="openingEditBtn" style="margin-top:12px;">Change the starting point or loans</button>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:8px 0 0;">A working picture for running the shop, not an audited statement. Take the books to your bookkeeper for anything you file.</p>`;
+    $("openingEditBtn").onclick = () => openOpeningSheet();
+  }
+
+  function openOpeningSheet(){
+    const op = openingPosition || {};
+    const inv = inventoryValue();
+    const owed = suppliers.reduce((t, s) => t + supplierBalance(s.id), 0);
+    $("op-date").value = op.date || todayISO();
+    $("op-cash").value = op.cash != null ? op.cash : "";
+    $("op-stock").value = op.stockAtCost != null ? op.stockAtCost : (inv.atCost ? Math.round(inv.atCost) : "");
+    $("op-payables").value = op.payables != null ? op.payables : (owed ? Math.round(owed * 100) / 100 : "");
+    $("op-equipment").value = op.equipment != null ? op.equipment : "";
+    $("op-other").value = op.otherAssets != null ? op.otherAssets : "";
+    $("op-loans").value = op.loans != null ? op.loans : "";
+    openSheet("openingSheet");
+  }
+
+  async function saveOpening(){
+    const n = (id) => { const v = parseFloat($(id).value); return isNaN(v) ? 0 : v; };
+    const date = $("op-date").value || todayISO();
+    if(date > todayISO()){ showToast("The starting date can't be in the future"); return; }
+    const data = {
+      date, cash: n("op-cash"), stockAtCost: n("op-stock"), payables: n("op-payables"),
+      equipment: n("op-equipment"), otherAssets: n("op-other"), loans: n("op-loans"),
+      updatedAt: new Date().toISOString(),
+      updatedBy: (auth.currentUser && auth.currentUser.email) || null
+    };
+    try{
+      await db.collection("settings").doc("openingPosition").set(data);
+      openingPosition = data;
+      closeSheet("openingSheet");
+      renderCashFlow(); renderBalanceSheet();
+      showToast("Starting point saved");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't save the starting point");
+    }
+  }
+
+  // =====================================================================
+  // CUSTOMERS
+  // =====================================================================
+  // Most sales at a sari-sari counter are to people whose names nobody writes
+  // down, and that's right — nobody should be asked for a name to buy a
+  // sachet of coffee. So identity is optional: a regular can be tagged with
+  // one tap, online customers are known by their number, and everything else
+  // (the hours, the basket) is worked out without knowing who anyone is.
+  let cartSukiId = null;
+
+  function renderCartSuki(){
+    const sel = document.getElementById("cartSuki");
+    if(!sel) return;
+    // A sale on the book already names its customer.
+    const onBook = $("cartPayment") && $("cartPayment").value === "utang";
+    $("sukiField").style.display = onBook ? "none" : "";
+    const sorted = customers.slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    sel.innerHTML = `<option value="">Walk-in customer</option>` +
+      sorted.map(c => `<option value="${escapeHtml(c.id)}"${c.id === cartSukiId ? " selected" : ""}>${escapeHtml(c.name || "—")}${c.barangay ? " · " + escapeHtml(c.barangay) : ""}</option>`).join("");
+    const canAdd = currentUserRole === "owner" || currentUserRole === "manager";
+    $("sukiNewBtn").style.display = canAdd ? "" : "none";
+  }
+
+  function openSukiSheet(){
+    $("suki-name").value = ""; $("suki-phone").value = ""; $("suki-barangay").value = "";
+    $("suki-consent").checked = false;
+    openSheet("sukiSheet");
+  }
+
+  async function saveSuki(){
+    const name = $("suki-name").value.trim();
+    const phone = $("suki-phone").value.trim();
+    const barangay = $("suki-barangay").value.trim();
+    if(!name){ showToast("Enter a name"); return; }
+    // Under the Data Privacy Act a phone number is personal information:
+    // keep it only with the person's say-so.
+    if(phone && !$("suki-consent").checked){ showToast("Tick the box once they've agreed — or leave the number out"); return; }
+    const dup = customers.find(c => (c.name || "").trim().toLowerCase() === name.toLowerCase() && (c.barangay || "") === barangay);
+    if(dup){ cartSukiId = dup.id; closeSheet("sukiSheet"); renderCartSuki(); showToast(name + " is already a regular — picked"); return; }
+    try{
+      const ref = await db.collection("customers").add({
+        name, phone: phone || null, barangay: barangay || null, suki: true,
+        consentAt: phone ? new Date().toISOString() : null,
+        createdAt: new Date().toISOString(),
+        createdBy: (auth.currentUser && auth.currentUser.email) || null
+      });
+      cartSukiId = ref.id;
+      closeSheet("sukiSheet");
+      renderCartSuki();
+      showToast(name + " added and picked for this sale");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't add them — only an owner or manager can");
+    }
+  }
+
+  function phoneKey(p){
+    const d = String(p || "").replace(/\D/g, "");
+    return d.length >= 10 ? d.slice(-10) : (d || null);
+  }
+
+  function customerAnalytics(){
+    const since28 = daysAgo(28), since60 = daysAgo(60), since14 = daysAgo(14);
+    const hourCount = Array(24).fill(0), hourValue = Array(24).fill(0);
+    let total28 = 0, known28 = 0, visits28 = 0;
+    const regulars = {};
+    sales.forEach(s => {
+      if(isReturnDoc(s) || !s.timestamp) return;
+      const t = new Date(s.timestamp);
+      if(t >= since28){
+        hourCount[t.getHours()]++;
+        hourValue[t.getHours()] += Number(s.total) || 0;
+        total28 += Number(s.total) || 0;
+        visits28++;
+      }
+      const id = s.sukiId || (settlementOf(s) === "utang" ? s.customerId : null);
+      if(!id || t < since60) return;
+      const c = customerById(id);
+      const r = regulars[id] || (regulars[id] = { id, name: (c && c.name) || s.sukiName || s.customerName || "—",
+        barangay: c && c.barangay, visits60: 0, visits28: 0, spend28: 0, last: null });
+      r.visits60++;
+      if(t >= since28){ r.visits28++; r.spend28 += Number(s.total) || 0; known28 += Number(s.total) || 0; }
+      if(!r.last || t > r.last) r.last = t;
+    });
+    const list = Object.values(regulars);
+    const active = list.filter(r => r.visits28 > 0);
+    const top = active.slice().sort((a, b) => b.spend28 - a.spend28).slice(0, 10);
+    const repeat = active.filter(r => r.visits28 >= 2).length;
+    const lapsed = list.filter(r => r.visits60 >= 3 && r.last < since14)
+      .sort((a, b) => b.visits60 - a.visits60);
+
+    // Online customers are known by their number, whether or not they're tagged.
+    const online = {};
+    const towns = {};
+    orders.forEach(o => {
+      if(o.status === "cancelled") return;
+      const when = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate() : new Date(o.createdAt || 0);
+      if(isNaN(when) || when < since60) return;
+      const k = phoneKey(o.phone) || ("name:" + (o.customerName || "").toLowerCase());
+      const r = online[k] || (online[k] = { name: o.customerName || "—", orders: 0, spend: 0, last: null });
+      r.orders++; r.spend += Number(o.total) || 0;
+      if(!r.last || when > r.last) r.last = when;
+      if(o.method === "delivery"){
+        const town = o.deliveryZone || "No area set";
+        towns[town] = (towns[town] || 0) + 1;
+      }
+    });
+    const onlineList = Object.values(online);
+
+    let peak = -1;
+    hourCount.forEach((n, h) => {
+      if(peak < 0 || n > hourCount[peak] || (n === hourCount[peak] && hourValue[h] > hourValue[peak])) peak = h;
+    });
+    return {
+      hourCount, hourValue, peak: hourCount[peak] > 0 ? peak : null, visits28, total28,
+      knownShare: total28 > 0 ? known28 / total28 : 0,
+      regularsActive: active.length, repeat, top, lapsed,
+      onlineCustomers: onlineList.length,
+      onlineRepeat: onlineList.filter(r => r.orders >= 2).length,
+      onlineTop: onlineList.sort((a, b) => b.spend - a.spend).slice(0, 5),
+      towns: Object.entries(towns).sort((a, b) => b[1] - a[1])
+    };
+  }
+
+  function hourLabel(h){
+    const suffix = h < 12 ? "am" : "pm";
+    const hh = h % 12 === 0 ? 12 : h % 12;
+    return hh + suffix;
+  }
+
+  function renderCustomers(){
+    const el = document.getElementById("customersBody");
+    if(!el) return;
+    const a = customerAnalytics();
+    if(!a.visits28){
+      el.innerHTML = `<div style="font-size:13px;color:var(--text-muted);">No sales in the last four weeks yet. This fills in as the till is used.</div>`;
+      return;
+    }
+    // Busiest hours: one series, one colour, bars from a shared baseline.
+    let lo = 23, hi = 0;
+    a.hourCount.forEach((n, h) => { if(n > 0){ lo = Math.min(lo, h); hi = Math.max(hi, h); } });
+    lo = Math.min(lo, 7); hi = Math.max(hi, 19);
+    const hours = []; for(let h = lo; h <= hi; h++) hours.push(h);
+    const W = 320, H = 110, base = 92, top = 6, gap = 2;
+    const bw = (W - gap * (hours.length + 1)) / hours.length;
+    const max = Math.max(1, ...hours.map(h => a.hourCount[h]));
+    let svg = `<line x1="0" y1="${base}" x2="${W}" y2="${base}" stroke="var(--border)" stroke-width="1"/>`;
+    hours.forEach((h, i) => {
+      const n = a.hourCount[h];
+      const bh = n > 0 ? Math.max(3, n / max * (base - top)) : 0;
+      const x = gap + i * (bw + gap);
+      const isPeak = h === a.peak;
+      if(bh > 0){
+        const r = Math.min(4, bw / 2);
+        const y = base - bh;
+        // Rounded at the top only, anchored flat to the baseline.
+        svg += `<path d="M${x.toFixed(1)},${base} V${(y + r).toFixed(1)} Q${x.toFixed(1)},${y.toFixed(1)} ${(x + r).toFixed(1)},${y.toFixed(1)} H${(x + bw - r).toFixed(1)} Q${(x + bw).toFixed(1)},${y.toFixed(1)} ${(x + bw).toFixed(1)},${(y + r).toFixed(1)} V${base} Z" style="fill:var(--primary);opacity:${isPeak ? 1 : 0.55}"/>`;
+      }
+      // A generous invisible target, so a thumb can pick a thin bar.
+      svg += `<rect class="hour-hit" data-h="${h}" x="${(x - gap / 2).toFixed(1)}" y="0" width="${(bw + gap).toFixed(1)}" height="${H}" fill="transparent"/>`;
+      if((h - lo) % 3 === 0) svg += `<text x="${(x + bw / 2).toFixed(1)}" y="${H - 2}" text-anchor="middle" style="font-size:9px;fill:var(--text-muted);">${hourLabel(h)}</text>`;
+    });
+    const peakShare = a.peak != null ? Math.round(a.hourCount[a.peak] / a.visits28 * 100) : 0;
+    let html = `
+      <div style="font-size:12px;font-weight:800;margin-bottom:2px;">Busiest hours, last four weeks</div>
+      <div id="hourReadout" style="font-size:12px;color:var(--text-muted);min-height:18px;">${a.peak != null ? `Busiest: <b style="color:var(--text);">${hourLabel(a.peak)}–${hourLabel((a.peak + 1) % 24)}</b>, ${peakShare}% of sales. Tap a bar for any hour.` : ""}</div>
+      <svg id="hourChart" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;margin-top:4px;">${svg}</svg>
+
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px;font-variant-numeric:tabular-nums;">
+        <div><div style="font-size:11px;color:var(--text-muted);">Sales, 4 weeks</div><div style="font-size:18px;font-weight:800;">${a.visits28}</div></div>
+        <div><div style="font-size:11px;color:var(--text-muted);">Average spend</div><div style="font-size:18px;font-weight:800;">${peso(a.total28 / a.visits28)}</div></div>
+        <div><div style="font-size:11px;color:var(--text-muted);">From known regulars</div><div style="font-size:18px;font-weight:800;">${Math.round(a.knownShare * 100)}%</div></div>
+      </div>`;
+
+    if(a.regularsActive){
+      html += `<div style="font-size:12px;font-weight:800;margin:12px 0 4px;">Regulars</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">${a.regularsActive} bought in the last four weeks; ${a.repeat} came back more than once.</div>` +
+        a.top.map(r => `<div class="report-row"><span>${escapeHtml(r.name)}${r.barangay ? ` <span style="color:var(--text-muted);">· ${escapeHtml(r.barangay)}</span>` : ""}<br><span style="font-size:11px;color:var(--text-muted);">${r.visits28} visit${r.visits28 === 1 ? "" : "s"} · last ${escapeHtml(shortDay(dateKey(r.last)))}</span></span><span>${peso(r.spend28)}</span></div>`).join("");
+    } else {
+      html += `<p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:12px 0 0;">No regulars tagged yet. At the till, pick a regular in the cart before completing the sale — one tap, and this list starts to fill.</p>`;
+    }
+    if(a.lapsed.length){
+      html += `<div style="font-size:12px;font-weight:800;margin:12px 0 4px;">Haven't been back in two weeks</div>` +
+        a.lapsed.slice(0, 5).map(r => `<div class="report-row"><span>${escapeHtml(r.name)}</span><span style="color:var(--text-muted);font-size:12px;">last ${escapeHtml(shortDay(dateKey(r.last)))}</span></div>`).join("");
+    }
+    if(a.onlineCustomers){
+      html += `<div style="font-size:12px;font-weight:800;margin:12px 0 4px;">Online, last two months</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">${a.onlineCustomers} customer${a.onlineCustomers === 1 ? "" : "s"} ordered; ${a.onlineRepeat} ordered more than once.${a.towns.length ? " Deliveries by area: " + a.towns.map(([t, n]) => `${escapeHtml(t)} ${n}`).join(", ") + "." : ""}</div>`;
+    }
+    html += `<p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:10px 0 0;">Names and numbers are personal information under the Data Privacy Act. Keep a number only when the customer has agreed, and remove anyone who asks.</p>`;
+    el.innerHTML = html;
+    Array.prototype.forEach.call(el.querySelectorAll(".hour-hit"), r => {
+      r.addEventListener("click", () => {
+        const h = Number(r.getAttribute("data-h"));
+        const n = a.hourCount[h];
+        $("hourReadout").innerHTML = `<b style="color:var(--text);">${hourLabel(h)}–${hourLabel((h + 1) % 24)}</b>: ${n} sale${n === 1 ? "" : "s"}, ${peso(a.hourValue[h])} in four weeks.`;
+      });
+    });
+  }
+
+  // =====================================================================
+  // DELIVERIES
+  // =====================================================================
+  // Sent out is recorded on the order as the rider's name and the time, not
+  // as a new status. The customer's order page only knows four steps, and a
+  // fifth it has never heard of would leave their progress bar blank.
+  let riderOrderId = null;
+
+  function orderTime(x){
+    if(!x) return null;
+    const d = x.toDate ? x.toDate() : new Date(x);
+    return isNaN(d) ? null : d;
+  }
+
+  function knownRiders(){
+    const seen = {};
+    orders.forEach(o => { if(o.riderName) seen[o.riderName] = (seen[o.riderName] || 0) + 1; });
+    return Object.keys(seen).sort((a, b) => seen[b] - seen[a]);
+  }
+
+  function openRiderSheet(o){
+    riderOrderId = o.id;
+    $("riderOrderLine").textContent = `#${o.code || ""} · ${o.customerName || ""} · ${o.deliveryZone || o.address || ""}`;
+    const riders = knownRiders();
+    $("riderList").innerHTML = riders.map(r => `<option value="${escapeHtml(r)}"></option>`).join("");
+    $("riderName").value = riders[0] || "";
+    openSheet("riderSheet");
+  }
+
+  async function sendOutForDelivery(){
+    const name = $("riderName").value.trim();
+    if(!name){ showToast("Who's taking it?"); return; }
+    try{
+      await db.collection("orders").doc(riderOrderId).update({
+        riderName: name, outAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+      });
+      closeSheet("riderSheet");
+      showToast("Out for delivery with " + name);
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't update the order — have the latest security rules been published?");
+    }
+  }
+
+  function median(list){
+    const v = list.filter(x => x != null && isFinite(x)).sort((a, b) => a - b);
+    if(!v.length) return null;
+    const m = Math.floor(v.length / 2);
+    return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+  }
+
+  function minutesText(m){
+    if(m == null) return "—";
+    if(m < 60) return Math.round(m) + " min";
+    const h = Math.floor(m / 60), r = Math.round(m % 60);
+    return h + " h" + (r ? " " + r + " min" : "");
+  }
+
+  function deliveryReport(){
+    const since = daysAgo(28);
+    const recent = orders.filter(o => o.method === "delivery").filter(o => {
+      const t = orderTime(o.createdAt); return t && t >= since;
+    });
+    const done = recent.filter(o => o.status === "completed");
+    const cancelled = recent.filter(o => o.status === "cancelled").length;
+    const mins = (a, b) => { const x = orderTime(a), y = orderTime(b); return x && y ? (y - x) / 60000 : null; };
+    const placedToDone = done.map(o => mins(o.createdAt, o.completedAt));
+    const toAccept = recent.map(o => mins(o.createdAt, o.acceptedAt));
+    const onRoad = done.map(o => mins(o.outAt, o.completedAt));
+    const c = costingDefaults();
+    const byTown = {};
+    done.forEach(o => {
+      const town = o.deliveryZone || "No area set";
+      const z = deliveryZones().find(x => x.name === o.deliveryZone);
+      const drops = z && Number(z.avgOrdersPerTrip) > 0 ? Number(z.avgOrdersPerTrip) : (c.drops > 0 ? c.drops : 1);
+      const cost = z && Number(z.distanceKm) > 0 ? tripCostFor(z.distanceKm, c) / drops : null;
+      const t = byTown[town] || (byTown[town] = { town, orders: 0, fees: 0, cost: 0, costKnown: true });
+      t.orders++;
+      t.fees += Number(o.deliveryFee) || 0;
+      if(cost == null) t.costKnown = false; else t.cost += cost;
+    });
+    const byRider = {};
+    done.forEach(o => {
+      if(!o.riderName) return;
+      const r = byRider[o.riderName] || (byRider[o.riderName] = { name: o.riderName, trips: 0, times: [] });
+      r.trips++; r.times.push(mins(o.outAt, o.completedAt));
+    });
+    return {
+      total: recent.length, done: done.length, cancelled,
+      medPlaced: median(placedToDone), medAccept: median(toAccept), medRoad: median(onRoad),
+      timed: placedToDone.filter(x => x != null).length,
+      towns: Object.values(byTown).sort((a, b) => b.orders - a.orders),
+      riders: Object.values(byRider).sort((a, b) => b.trips - a.trips)
+    };
+  }
+
+  function renderDeliveryReport(){
+    const el = document.getElementById("deliveryReportBody");
+    if(!el) return;
+    const d = deliveryReport();
+    if(!d.total){
+      el.innerHTML = `<div style="font-size:13px;color:var(--text-muted);">No delivery orders in the last four weeks.</div>`;
+      return;
+    }
+    let html = `
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:8px;font-variant-numeric:tabular-nums;">
+        <div><div style="font-size:11px;color:var(--text-muted);">Delivered</div><div style="font-size:18px;font-weight:800;">${d.done}</div></div>
+        <div><div style="font-size:11px;color:var(--text-muted);">Cancelled</div><div style="font-size:18px;font-weight:800;">${d.cancelled}</div></div>
+        <div><div style="font-size:11px;color:var(--text-muted);">Order to door</div><div style="font-size:18px;font-weight:800;">${minutesText(d.medPlaced)}</div></div>
+      </div>
+      <div class="report-row"><span>Typical wait before you accept</span><span>${minutesText(d.medAccept)}</span></div>
+      <div class="report-row"><span>Typical time on the road</span><span>${minutesText(d.medRoad)}</span></div>`;
+    if(d.towns.length){
+      html += `<div style="font-size:12px;font-weight:800;margin:12px 0 4px;">By area — fee charged against what the trip costs</div>` +
+        d.towns.map(t => {
+          const net = t.costKnown ? t.fees - t.cost : null;
+          return `<div class="report-row"><span>${escapeHtml(t.town)}<br><span style="font-size:11px;color:var(--text-muted);">${t.orders} deliver${t.orders === 1 ? "y" : "ies"} · fees ${peso(t.fees)}${t.costKnown ? " · trips about " + peso(t.cost) : " · no distance set for this area"}</span></span><span style="font-weight:800;${net != null && net < 0 ? "color:var(--danger);" : ""}">${net == null ? "—" : (net < 0 ? "−" : "") + peso(Math.abs(net))}</span></div>`;
+        }).join("");
+    }
+    if(d.riders.length){
+      html += `<div style="font-size:12px;font-weight:800;margin:12px 0 4px;">Riders</div>` +
+        d.riders.map(r => `<div class="report-row"><span>${escapeHtml(r.name)}</span><span>${r.trips} trip${r.trips === 1 ? "" : "s"} · ${minutesText(median(r.times))} each</span></div>`).join("");
+    }
+    if(d.timed < d.done){
+      html += `<p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:8px 0 0;">Times cover ${d.timed} of ${d.done} deliveries — orders handled before this version weren't timed.</p>`;
+    }
+    html += `<p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:8px 0 0;">Trip cost is estimated from the fuel, wear and rider pay set under Delivery. A negative figure means the fee doesn't cover the ride; the goods' margin may still make the order worth it.</p>`;
+    el.innerHTML = html;
+  }
+
+  function renderBusinessModules(){
+    if(currentUserRole !== "owner"){
+      ["cashFlowBlock","balanceSheetBlock","customersBlock","deliveryReportBlock"].forEach(id => {
+        const e = document.getElementById(id); if(e) e.style.display = "none";
+      });
+      return;
+    }
+    ["cashFlowBlock","balanceSheetBlock","customersBlock","deliveryReportBlock"].forEach(id => {
+      const e = document.getElementById(id); if(e) e.style.display = "";
+    });
+    renderCashFlow();
+    renderBalanceSheet();
+    renderCustomers();
+    renderDeliveryReport();
+  }
+
+
   function renderDeadStock(){
     const el = $("deadStockList");
     if(!el) return;
     const rows = [];
+    // "Never sold" only means something once the till has been recording long
+    // enough to have seen it sell. On a new till every line has never sold.
+    const tdays = advisorTradingDays();
+    const historyDays = tdays.length ? isoDaysBetween(tdays[0], todayISO()) : 0;
     products.forEach(p => {
       const stock = Number(p.stock) || 0;
       if(stock <= 0) return;
@@ -11622,14 +13376,16 @@
       const m = productMargin(p);
       const tied = m ? m.cost * stock : null;
       const last = lastSoldDaysAgo(p.id);
-      if(v <= 0 && (last == null || last >= DEAD_DAYS)){
+      if(v <= 0 && (last != null ? last >= DEAD_DAYS : historyDays >= DEAD_DAYS)){
         rows.push({ p, stock, tied, kind: "dead", last });
       } else if(v > 0 && stock / v > OVERSTOCK_DAYS){
         rows.push({ p, stock, tied, kind: "slow", cover: stock / v });
       }
     });
     if(rows.length === 0){
-      el.innerHTML = `<div style="font-size:13px;color:var(--text-muted);">Nothing is sitting still. Every line with stock is moving at a reasonable rate.</div>`;
+      el.innerHTML = historyDays < DEAD_DAYS
+        ? `<div style="font-size:13px;color:var(--text-muted);">The till has been recording for ${historyDays} day${historyDays === 1 ? "" : "s"}. A line counts as not moving after ${DEAD_DAYS} days without a sale, so this list fills in with time.</div>`
+        : `<div style="font-size:13px;color:var(--text-muted);">Nothing is sitting still. Every line with stock is moving at a reasonable rate.</div>`;
       return;
     }
     rows.sort((a, b) => (b.tied || 0) - (a.tied || 0));
@@ -12013,6 +13769,7 @@
     $("pay-date").value = todayISO();
     $("pay-amount").value = "";
     $("pay-ref").value = "";
+    payArmed = false;
     refreshPaymentTargets();
     openSheet("paymentSheet");
   }
@@ -12026,9 +13783,149 @@
       `<option value="${p.id}">${escapeHtml(p.date || "")} · ${peso(purchaseOutstanding(p))}${p.ref ? " · " + escapeHtml(p.ref) : ""}</option>`
     ).join("");
     const bal = supplierBalance(sid);
-    $("pay-balanceNote").innerHTML = bal > 0.005
-      ? `Outstanding balance <b>${peso(bal)}</b> across ${open.length} deliver${open.length === 1 ? "y" : "ies"}.`
-      : "Nothing outstanding with this supplier.";
+    const s = supplierById(sid) || {};
+    const name = escapeHtml(s.name || "this supplier");
+    let note;
+    if(bal > 0.005){
+      note = `Outstanding balance <b>${peso(bal)}</b> across ${open.length} deliver${open.length === 1 ? "y" : "ies"}.`;
+    } else if(s.terms === "cod"){
+      // The case that caught people out: a cash-on-delivery supplier is paid
+      // at the door, and recording the delivery already records that payment.
+      note = `<b>${name} is cash on delivery.</b> Each delivery is recorded as paid the moment you record it, so there is nothing to pay here. If you paid for a delivery, use <b>Record delivery</b> instead &mdash; recording it here as well would count the same money twice.`;
+    } else {
+      note = `Nothing is owed to ${name} right now. A payment recorded here is kept as <b>paid ahead</b> and shown on ${name}&rsquo;s card.`;
+    }
+    const last = supplierPaymentHistory(sid).find(r => r.kind !== "reversal" && !r.cancelled);
+    if(last) note += `<br><span style="color:var(--text-muted);">Last paid ${peso(last.amount)} on ${escapeHtml(last.date)}${last.method ? " · " + escapeHtml(last.method) : ""}${last.ref ? " · ref " + escapeHtml(last.ref) : ""}.</span>`;
+    $("pay-balanceNote").innerHTML = note;
+    payArmed = false;
+    updatePaymentButton();
+  }
+
+  // The button says what will happen before it happens, instead of a pop-up
+  // asking afterwards. A pop-up that is dismissed saves nothing and says
+  // nothing, which is exactly how a payment used to vanish.
+  let payArmed = false;
+  function updatePaymentButton(){
+    const btn = $("savePaymentBtn");
+    if(!btn) return;
+    const sid = $("pay-supplier").value;
+    const amount = parseFloat($("pay-amount").value);
+    const bal = supplierBalance(sid);
+    const extra = (!isNaN(amount) && amount > bal + 0.005) ? amount - Math.max(0, bal) : 0;
+    if(payArmed && extra > 0){
+      btn.textContent = `Yes — record ${peso(extra)} as paid ahead`;
+    } else if(extra > 0 && bal > 0.005){
+      btn.textContent = `Record payment (${peso(extra)} paid ahead)`;
+    } else if(extra > 0){
+      btn.textContent = `Record ${peso(extra)} as paid ahead`;
+    } else {
+      btn.textContent = "Record payment";
+    }
+  }
+
+  // Every peso paid to a supplier, newest first: payments recorded here, and
+  // deliveries paid in cash at the door (those carry no separate payment).
+  function supplierPaymentHistory(sid){
+    const cancelled = {};
+    supplierPayments.forEach(p => { if(p.reverses) cancelled[p.reverses] = true; });
+    const rows = supplierPayments.filter(p => p.supplierId === sid).map(p => {
+      const sign = supplierPaymentSign(p);
+      return {
+        id: p.id, date: p.date || "", amount: sign * (Number(p.amount) || 0), method: p.method || "",
+        ref: p.ref || "", advance: sign * (Number(p.advance) || 0), kind: sign < 0 ? "reversal" : "payment",
+        cancelled: !!cancelled[p.id], raw: p
+      };
+    });
+    purchases.filter(p => p.supplierId === sid && p.terms === "cod" && !isOrderDoc(p) && !isCreditDoc(p) && (Number(p.paidAmount) || 0) > 0)
+      .forEach(p => rows.push({ date: p.date || "", amount: Number(p.paidAmount) || 0, method: "cash on delivery",
+        ref: p.ref || "", advance: 0, kind: "cod" }));
+    return rows.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  }
+
+  function supplierPaidAhead(sid){
+    return supplierPayments.filter(p => p.supplierId === sid)
+      .reduce((t, p) => t + supplierPaymentSign(p) * (Number(p.advance) || 0), 0);
+  }
+
+  // A payment can't be edited or deleted — that's what makes the record worth
+  // anything. A mistake is cancelled by a reversal: the same amount, marked
+  // negative, pointing at the one it cancels. Both stay on the record.
+  let reverseArmedId = null;
+  async function reverseSupplierPayment(paymentId){
+    const p = supplierPayments.find(x => x.id === paymentId);
+    if(!p) return;
+    if(reverseArmedId !== paymentId){
+      reverseArmedId = paymentId;
+      openSupplierHistory(p.supplierId);
+      showToast("Tap again to cancel this payment");
+      return;
+    }
+    reverseArmedId = null;
+    const s = supplierById(p.supplierId) || {};
+    // What the original payment settled on deliveries has to be taken back off
+    // them, or they'd still show as paid. Recorded payments say where they went;
+    // older ones only say it if a single delivery was chosen, and a cash-on-
+    // delivery supplier's deliveries were never settled by a payment at all.
+    let allocations = Array.isArray(p.allocations) ? p.allocations.slice() : null;
+    if(!allocations){
+      if(s.terms === "cod" || Number(p.applied) === 0) allocations = [];
+      else if(p.purchaseId) allocations = [{ purchaseId: p.purchaseId, amount: Number(p.applied != null ? p.applied : p.amount) || 0 }];
+    }
+    try{
+      const batch = db.batch();
+      batch.set(db.collection("supplierPayments").doc(), {
+        supplierId: p.supplierId, supplierName: p.supplierName || s.name || null,
+        amount: Number(p.amount) || 0, sign: -1, reverses: p.id,
+        applied: -(Number(p.applied) || 0), advance: -(Number(p.advance) || 0),
+        method: p.method || null, ref: "Cancels payment of " + (p.date || ""),
+        date: todayISO(), createdAt: new Date().toISOString(),
+        byUid: (auth.currentUser && auth.currentUser.uid) || null
+      });
+      (allocations || []).forEach(a => {
+        const pur = purchases.find(x => x.id === a.purchaseId);
+        if(!pur) return;
+        const paid = Math.max(0, (Number(pur.paidAmount) || 0) - (Number(a.amount) || 0));
+        batch.update(db.collection("purchases").doc(pur.id), {
+          paidAmount: Math.round(paid * 100) / 100,
+          status: paid <= 0.005 ? "unpaid" : (paid >= purchaseBilled(pur) - 0.005 ? "paid" : "partial")
+        });
+      });
+      await batch.commit();
+      showToast(allocations ? "Payment cancelled" : "Payment cancelled — check which deliveries it had paid, they still show as paid");
+      closeSheet("supplierHistorySheet");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't cancel the payment");
+    }
+  }
+
+  function openSupplierHistory(sid){
+    const s = supplierById(sid) || {};
+    const rows = supplierPaymentHistory(sid);
+    const ym = thisMonthKey();
+    const month = rows.filter(r => monthKeyOf(r.date) === ym).reduce((t, r) => t + r.amount, 0);
+    const ahead = supplierPaidAhead(sid);
+    const owner = currentUserRole === "owner";
+    $("supHistTitle").textContent = "Payments — " + (s.name || "supplier");
+    $("supHistBody").innerHTML = !rows.length
+      ? `<div style="font-size:13px;color:var(--text-muted);">No payments recorded for ${escapeHtml(s.name || "this supplier")} yet.</div>`
+      : `<div class="report-row" style="font-weight:800;"><span>Paid this month</span><span>${peso(month)}</span></div>
+         ${ahead > 0.005 ? `<div class="report-row" style="color:var(--info);"><span>Paid ahead, not yet matched to a delivery</span><span>${peso(ahead)}</span></div>` : ""}
+         <div style="margin-top:8px;">${rows.map(r => `
+           <div style="padding:9px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;${r.cancelled ? "opacity:.55;" : ""}">
+             <div style="min-width:0;font-size:13px;line-height:1.45;">
+               <b>${escapeHtml(r.date)}</b> · ${escapeHtml(r.kind === "reversal" ? "cancellation" : (r.method || "payment"))}${r.ref ? `<br><span style="color:var(--text-muted);">${r.kind === "reversal" ? "" : "ref "}${escapeHtml(r.ref)}</span>` : ""}
+               ${r.advance > 0.005 ? `<br><span style="color:var(--info);font-size:12px;">${peso(r.advance)} of it paid ahead</span>` : ""}
+               ${r.cancelled ? `<br><span style="font-size:12px;">Cancelled</span>` : ""}
+               ${owner && r.kind === "payment" && !r.cancelled ? `<br><button type="button" class="pay-reverse" data-id="${escapeHtml(r.id)}" style="background:none;border:0;padding:4px 0 0;color:var(--danger);font-weight:700;font-size:12px;cursor:pointer;">${reverseArmedId === r.id ? "Tap again to cancel " + peso(r.amount) : "Cancel this payment"}</button>` : ""}
+             </div>
+             <div style="font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;">${r.amount < 0 ? "−" : ""}${peso(Math.abs(r.amount))}</div>
+           </div>`).join("")}</div>`;
+    Array.prototype.forEach.call($("supHistBody").querySelectorAll(".pay-reverse"), b => {
+      b.onclick = () => reverseSupplierPayment(b.getAttribute("data-id"));
+    });
+    openSheet("supplierHistorySheet");
   }
 
   async function savePayment(){
@@ -12037,7 +13934,14 @@
     if(!sid){ showToast("Choose a supplier"); return; }
     if(isNaN(amount) || amount <= 0){ showToast("Enter an amount"); return; }
     const bal = supplierBalance(sid);
-    if(amount > bal + 0.005 && !confirm(`That's more than the ${peso(bal)} outstanding. Record it anyway?`)) return;
+    // Paying more than is owed takes a second, deliberate tap on a button
+    // that says so. Nothing is lost on the first tap; the amount stays put.
+    if(amount > bal + 0.005 && !payArmed){
+      payArmed = true;
+      updatePaymentButton();
+      showToast(bal > 0.005 ? `Only ${peso(bal)} is owed — tap again to record the rest as paid ahead` : "Nothing is owed — tap again to record it as paid ahead");
+      return;
+    }
 
     const chosen = $("pay-purchase").value;
     // Payments spread over the oldest unpaid deliveries first unless one is
@@ -12047,11 +13951,22 @@
       : purchases.filter(p => p.supplierId === sid && purchaseOutstanding(p) > 0.005)
                  .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
 
+    let toApply = amount;
+    const allocations = [];
+    targets.forEach(p => {
+      const a = Math.min(purchaseOutstanding(p), Math.max(0, toApply));
+      if(a > 0.005) allocations.push({ purchaseId: p.id, amount: Math.round(a * 100) / 100 });
+      toApply -= a;
+    });
+    const advance = Math.max(0, Math.round(toApply * 100) / 100);
     const payment = {
       supplierId: sid,
       supplierName: (supplierById(sid) || {}).name || null,
       purchaseId: chosen || null,
       amount,
+      applied: Math.round((amount - advance) * 100) / 100,
+      advance,
+      allocations,
       date: $("pay-date").value || todayISO(),
       method: $("pay-method").value,
       ref: $("pay-ref").value.trim() || null,
@@ -12076,7 +13991,8 @@
       }
       await batch.commit();
       closeSheet("paymentSheet");
-      showToast("Payment recorded");
+      payArmed = false;
+      showToast(`Paid ${peso(amount)} to ${payment.supplierName || "supplier"}${advance > 0 ? " — " + peso(advance) + " paid ahead" : ""}`);
     }catch(err){
       console.error(err);
       showToast("Couldn't record the payment");
@@ -12114,6 +14030,8 @@
     on("dl-updateCost", "onchange", renderDeliveryLines);
     on("saveDeliveryBtn", "onclick", saveDelivery);
     on("pay-supplier", "onchange", refreshPaymentTargets);
+    on("pay-amount", "oninput", () => { payArmed = false; updatePaymentButton(); });
+    on("pay-purchase", "onchange", () => { payArmed = false; updatePaymentButton(); });
     on("savePaymentBtn", "onclick", savePayment);
     on("buyBudgetInput", "oninput", renderOrderPlan);
     on("buyFilterSelect", "onchange", renderOrderPlan);
@@ -12261,6 +14179,12 @@
     $("utangSearch").addEventListener("input", renderUtangList);
     $("cartPayment").addEventListener("change", renderCartCustomer);
     $("cartCustomer").addEventListener("change", (e) => { cartCustomerId = e.target.value || null; renderCartCustomer(); });
+    $("cartSuki").addEventListener("change", (e) => { cartSukiId = e.target.value || null; });
+    $("cartPayment").addEventListener("change", () => renderCartSuki());
+    $("sukiNewBtn").onclick = () => openSukiSheet();
+    $("sukiSaveBtn").onclick = () => saveSuki();
+    $("openingSaveBtn").onclick = () => saveOpening();
+    $("riderSaveBtn").onclick = () => sendOutForDelivery();
     $("addExpenseBtn").onclick = () => openExpenseSheet(false);
     $("addOwnerCashBtn").onclick = () => openExpenseSheet(true);
     $("saveExpenseBtn").onclick = saveExpense;
@@ -12287,6 +14211,16 @@
     $("photoAssignSkip").onclick = () => skipCurrentPhoto();
     $("photoTidy").onchange = () => renderPhotoSamples();
     $("finderBtn").onclick = () => runImageFinder();
+    $("advisorShareBtn").onclick = () => shareAdvisorSummary();
+    $("advisorCopyBtn").onclick = () => copyAdvisorSummary();
+    $("barcodeRoundBtn").onclick = () => startBarcodeRound();
+    $("attachSearch").oninput = (e) => renderAttachHits(e.target.value);
+    $("attachSkipBtn").onclick = () => attachSkip();
+    $("attachChooseExisting").onclick = () => showAttachStage("pick");
+    $("attachChooseNew").onclick = () => createNewFromScan();
+    $("attachChooseCancel").onclick = () => attachSkip();
+    $("attachPickNew").onclick = () => createNewFromScan();
+    $("attachFindPhoto").onclick = () => findPhotoForAttached();
     $("finderOneFile").onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; finderManualPhoto(f, false); };
     $("finderOneCamera").onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; finderManualPhoto(f, true); };
     $("importFileBtn").onclick = () => $("importFile").click();
@@ -12434,7 +14368,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v70";
+  const APP_VERSION = "v75";
 
   function init(){
     applyRememberedDesign();
