@@ -204,13 +204,29 @@
          like a product on a shelf.
      The owner can override this in Store name & design. */
   .thumb img, .inv-thumb img{transition:opacity .15s ease;}
-  .thumb img[data-shape="wide"], .thumb img[data-shape="tall"],
-  .inv-thumb img[data-shape="wide"], .inv-thumb img[data-shape="tall"]{
-    object-fit:contain;padding:7%;background:#fff;
+  /* The whole photo, never cropped, never blown up — and no white bands
+     beside it. The band is filled by the same picture, enlarged to cover the
+     square and blurred, so the box reads as one image. This happens as the
+     card is drawn, so it needs nothing done to the stored photos. */
+  .thumb .photo-bg, .inv-thumb .photo-bg{
+    position:absolute;inset:0;width:100%;height:100%;
+    object-fit:cover;transform:scale(1.18);
+    filter:blur(14px) saturate(.9) brightness(1.04);
+    display:none;
   }
-  .thumb:has(img[data-shape]){background:#fff;}
-  :root[data-photo-fit="whole"] .thumb img, :root[data-photo-fit="whole"] .inv-thumb img{object-fit:contain;padding:7%;background:#fff;}
-  :root[data-photo-fit="fill"] .thumb img, :root[data-photo-fit="fill"] .inv-thumb img{object-fit:cover;padding:0;}
+  .inv-thumb{position:relative;overflow:hidden;}
+  .inv-thumb .photo-bg{filter:blur(7px) saturate(.9) brightness(1.04);}
+  .thumb .photo-main, .inv-thumb .photo-main{position:relative;z-index:1;}
+  .thumb img[data-shape="wide"] ~ .photo-bg, .thumb img[data-shape="tall"] ~ .photo-bg{display:block;}
+  .thumb img[data-shape="wide"]:not(.photo-bg), .thumb img[data-shape="tall"]:not(.photo-bg),
+  .inv-thumb img[data-shape="wide"]:not(.photo-bg), .inv-thumb img[data-shape="tall"]:not(.photo-bg){
+    object-fit:contain;padding:4%;background:transparent;
+  }
+
+  :root[data-photo-fit="whole"] .thumb img:not(.photo-bg), :root[data-photo-fit="whole"] .inv-thumb img:not(.photo-bg){object-fit:contain;padding:4%;background:transparent;}
+  :root[data-photo-fit="whole"] .photo-bg{display:block !important;}
+  :root[data-photo-fit="fill"] .thumb img:not(.photo-bg), :root[data-photo-fit="fill"] .inv-thumb img:not(.photo-bg){object-fit:cover;padding:0;}
+  :root[data-photo-fit="fill"] .photo-bg{display:none !important;}
   /* The category tile that stands in for a missing photo. It takes the shop's
      own colour, so changing the theme restyles every one of them at once. */
   .cat-tile{
@@ -3366,8 +3382,16 @@
   // added later: "load" doesn't bubble, but it can be caught on the way down.
   document.addEventListener("load", (e) => {
     const t = e.target;
-    if(t && t.tagName === "IMG" && t.closest && t.closest(".thumb, .inv-thumb, .photo-preview")) fitProductPhoto(t);
+    if(t && t.tagName === "IMG" && !t.classList.contains("photo-bg") && t.closest && t.closest(".thumb, .inv-thumb, .photo-preview")) fitProductPhoto(t);
   }, true);
+
+  // The blurred filler sits AFTER the photo in the markup, so plain CSS can
+  // switch it on only for the photos that need it (img[data-shape] ~ .photo-bg)
+  // while it stays behind everything, out of the way of square photos.
+  function photoLayers(src){
+    const u = escapeHtml(src);
+    return `<img class="photo-main" src="${u}" alt="" loading="lazy"><img class="photo-bg" src="${u}" alt="" aria-hidden="true" loading="lazy">`;
+  }
 
   function photoDisplaySrc(p){
     if(!p) return "";
@@ -6804,7 +6828,7 @@
       card.className = "product-card" + (p.stock <= 0 ? " out" : "");
       const lowClass = p.stock <= (p.threshold || 5) && p.stock > 0 ? " low" : "";
       card.innerHTML = `
-        <div class="thumb">${photoDisplaySrc(p) ? `<img src="${photoDisplaySrc(p)}" alt="" loading="lazy">` : productPlaceholder(p)}</div>
+        <div class="thumb">${photoDisplaySrc(p) ? photoLayers(photoDisplaySrc(p)) : productPlaceholder(p)}</div>
         <div class="name">${escapeHtml(p.name)}</div>
         <div class="price">${peso(p.price)}</div>
         <div class="stock${lowClass}">${p.stock <= 0 ? "Out of stock" : formatStock(p.stock) + " in stock"}</div>
@@ -7426,7 +7450,7 @@
       const row = document.createElement("div");
       row.className = "inv-item";
       row.innerHTML = `
-        <div class="inv-thumb">${photoDisplaySrc(p) ? `<img src="${photoDisplaySrc(p)}" alt="" loading="lazy">` : productPlaceholder(p)}</div>
+        <div class="inv-thumb">${photoDisplaySrc(p) ? photoLayers(photoDisplaySrc(p)) : productPlaceholder(p)}</div>
         <div class="info">
           <div class="name">${escapeHtml(p.name)}</div>
           <div class="meta">${p.sku ? escapeHtml(p.sku) + " · " : ""}${p.localName ? escapeHtml(p.localName) + " · " : ""}${peso(p.price)}${p.unit ? " / " + escapeHtml(p.unit) : ""} · ${escapeHtml(p.category || "Uncategorized")}${(p.hideOnline || isTobacco(p)) ? " · counter only" : ""}${
@@ -14939,7 +14963,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v83";
+  const APP_VERSION = "v84";
 
   function init(){
     applyRememberedDesign();
