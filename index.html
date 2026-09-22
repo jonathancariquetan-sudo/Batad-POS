@@ -217,14 +217,17 @@
   .inv-thumb{position:relative;overflow:hidden;}
   .inv-thumb .photo-bg{filter:blur(7px) saturate(.9) brightness(1.04);}
   .thumb .photo-main, .inv-thumb .photo-main{position:relative;z-index:1;}
-  .thumb img[data-shape="wide"] ~ .photo-bg, .thumb img[data-shape="tall"] ~ .photo-bg{display:block;}
+  /* The blurred filler was tried and looked worse than the thing it fixed —
+     a halo around every photo. A long photo now sits on plain white instead,
+     which is what a product page looks like everywhere else. */
   .thumb img[data-shape="wide"]:not(.photo-bg), .thumb img[data-shape="tall"]:not(.photo-bg),
   .inv-thumb img[data-shape="wide"]:not(.photo-bg), .inv-thumb img[data-shape="tall"]:not(.photo-bg){
-    object-fit:contain;padding:4%;background:transparent;
+    object-fit:contain;padding:5%;background:#fff;
   }
+  .thumb:has(img[data-shape="wide"]), .thumb:has(img[data-shape="tall"]),
+  .inv-thumb:has(img[data-shape="wide"]), .inv-thumb:has(img[data-shape="tall"]){background:#fff;}
 
-  :root[data-photo-fit="whole"] .thumb img:not(.photo-bg), :root[data-photo-fit="whole"] .inv-thumb img:not(.photo-bg){object-fit:contain;padding:4%;background:transparent;}
-  :root[data-photo-fit="whole"] .photo-bg{display:block !important;}
+  :root[data-photo-fit="whole"] .thumb img:not(.photo-bg), :root[data-photo-fit="whole"] .inv-thumb img:not(.photo-bg){object-fit:contain;padding:5%;background:#fff;}
   :root[data-photo-fit="fill"] .thumb img:not(.photo-bg), :root[data-photo-fit="fill"] .inv-thumb img:not(.photo-bg){object-fit:cover;padding:0;}
   :root[data-photo-fit="fill"] .photo-bg{display:none !important;}
   /* The category tile that stands in for a missing photo. It takes the shop's
@@ -1107,7 +1110,7 @@
       <button type="button" class="btn btn-primary" id="finderBtn" style="margin-top:8px;">🔎 Find &amp; download product photos</button>
       <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Looks up each product by its barcode across the four open product databases, then by its full name and size. Nothing is saved until you have seen it. Expect a lot of &ldquo;no verified image found&rdquo; &mdash; most sari-sari lines are in no open database, and an honest blank beats a picture of the wrong thing.</p>
       <button type="button" class="btn btn-secondary" id="squarePhotosBtn" style="margin-top:8px;">🧹 Fit photos to the square</button>
-      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Puts every photo you already have onto a square, showing the whole picture &mdash; nothing cropped and nothing enlarged. The space beside a tall or wide photo is filled with the picture&rsquo;s own background instead of a white band, so the grid looks even.</p>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">New photos are saved square automatically. This does the same for the photos you already have: each one is placed whole on a white square &mdash; nothing cropped, nothing enlarged &mdash; so every card fills its box evenly.</p>
       <div id="squarePhotosResult" style="display:none;font-size:12px;line-height:1.6;margin-top:8px;"></div>
       <div id="finderStorageNote" style="display:none;"></div>
       <div id="finderResults" style="display:none;margin-top:12px;"></div>
@@ -2951,15 +2954,44 @@
 
   // Tidying is best-effort. If anything about it fails the plain resize still
   // runs, so a photo is never lost to a correction that didn't work.
+  // Every photo is saved square. The picture is not cropped and the product
+  // is not blown up — the shorter side is simply padded with white, so a
+  // portrait pack and a long sachet both land in a square that fills its box
+  // on every screen with an even margin. This is done once, when the photo is
+  // saved, so nothing has to be worked out while the till is being used.
+  function padToSquare(dataUrl, maxDim, quality){
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const w = img.width, h = img.height;
+        if(!w || !h){ resolve(dataUrl); return; }
+        if(Math.abs(w - h) / Math.max(w, h) < 0.01){ resolve(dataUrl); return; }
+        const dim = Math.min(maxDim || Math.max(w, h), Math.max(w, h));
+        const c = document.createElement("canvas");
+        c.width = c.height = dim;
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, dim, dim);
+        const s = dim / Math.max(w, h);
+        const dw = Math.max(1, Math.round(w * s)), dh = Math.max(1, Math.round(h * s));
+        ctx.drawImage(img, Math.round((dim - dw) / 2), Math.round((dim - dh) / 2), dw, dh);
+        resolve(c.toDataURL("image/jpeg", quality || 0.85));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  }
+
   async function preparePhotoFile(file, tidy, maxDim, quality){
     if(tidy){
       try{
         const img = await loadImageFromFile(file);
         const url = tidyPhotoToDataUrl(img, maxDim, quality);
-        if(url) return url;
+        if(url) return await padToSquare(url, maxDim, quality);
       }catch(err){ console.warn("tidy failed, using the photo as it is", err); }
     }
-    return resizeImageFile(file, maxDim, quality);
+    const plain = await resizeImageFile(file, maxDim, quality);
+    return padToSquare(plain, maxDim, quality);
   }
 
   // Category glyphs. Drawn on a 24x24 grid, filled with currentColor so they
@@ -9104,43 +9136,15 @@
   function squarePhotoFromImage(img){
     const w = img.width, h = img.height;
     if(!w || !h) return null;
-    // Already square: the whole picture already fills its box.
-    if(Math.abs(w - h) / Math.max(w, h) < 0.02) return null;
+    if(Math.abs(w - h) / Math.max(w, h) < 0.02) return null;   // already square
     const dim = Math.min(SQUARE_PHOTO_DIM, Math.max(w, h));
     const out = document.createElement("canvas");
     out.width = dim; out.height = dim;
     const ctx = out.getContext("2d");
-    // The whole photo is kept, at its own proportions — nothing cropped, the
-    // product not enlarged. What fills the space beside it is the photo
-    // itself, blown up to cover the square and blurred, so the picture reads
-    // as one thing instead of a small photo stranded on a white band. Where
-    // blurring isn't available, the colour along the photo's edge is used,
-    // which for a studio backdrop is the backdrop itself.
-    const scaleCover = dim / Math.min(w, h);
-    const cw = Math.ceil(w * scaleCover), ch = Math.ceil(h * scaleCover);
-    let blurred = false;
-    try{
-      if(typeof ctx.filter === "string"){
-        ctx.filter = "blur(" + Math.max(12, Math.round(dim * 0.10)) + "px) brightness(1.06) saturate(0.85)";
-        ctx.drawImage(img, Math.round((dim - cw) / 2), Math.round((dim - ch) / 2), cw, ch);
-        ctx.filter = "none";
-        blurred = true;
-      }
-    }catch(err){ /* older browser — fall through to the flat fill */ }
-    if(!blurred){
-      let edge = null;
-      try{
-        const probe = document.createElement("canvas");
-        probe.width = Math.min(w, 80); probe.height = Math.min(h, 80);
-        const pctx = probe.getContext("2d");
-        pctx.drawImage(img, 0, 0, probe.width, probe.height);
-        edge = photoEdgeStats(pctx.getImageData(0, 0, probe.width, probe.height).data, probe.width, probe.height);
-      }catch(err){ /* can't read it — plain white then */ }
-      ctx.fillStyle = edge ? "rgb(" + Math.round(edge.r) + "," + Math.round(edge.g) + "," + Math.round(edge.b) + ")" : "#FFFFFF";
-      ctx.fillRect(0, 0, dim, dim);
-    }
-    const scaleFit = dim / Math.max(w, h);
-    const dw = Math.max(1, Math.round(w * scaleFit)), dh = Math.max(1, Math.round(h * scaleFit));
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, dim, dim);
+    const s = dim / Math.max(w, h);
+    const dw = Math.max(1, Math.round(w * s)), dh = Math.max(1, Math.round(h * s));
     ctx.drawImage(img, Math.round((dim - dw) / 2), Math.round((dim - dh) / 2), dw, dh);
     return out.toDataURL("image/jpeg", 0.85);
   }
@@ -9165,7 +9169,7 @@
     if(!squareArmed){
       squareArmed = true;
       $("squarePhotosBtn").textContent = "Tap again to fit " + list.length + " photo" + (list.length === 1 ? "" : "s");
-      box.innerHTML = "Each photo is placed whole on a square, with its own background filling the sides. The photo it replaces isn't kept, so this can't be undone — but nothing is deleted and no product loses its photo.";
+      box.innerHTML = "Each photo is placed whole on a white square. The photo it replaces isn't kept, so this can't be undone — but nothing is deleted and no product loses its photo.";
       clearTimeout(squareArmTimer);
       squareArmTimer = setTimeout(() => { squareArmed = false; $("squarePhotosBtn").textContent = "🧹 Fit photos to the square"; }, 8000);
       return;
@@ -14968,7 +14972,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v85";
+  const APP_VERSION = "v87";
 
   function init(){
     applyRememberedDesign();
