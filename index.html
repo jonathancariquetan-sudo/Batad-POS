@@ -1090,8 +1090,8 @@
       <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Walk the shelf and scan each item. The POS asks which product it is, saves the barcode, and checks straight away whether the open databases hold a real photo of it. This is what the photo finder needs to work &mdash; it can&rsquo;t look anything up without a barcode.</p>
       <button type="button" class="btn btn-primary" id="finderBtn" style="margin-top:8px;">🔎 Find &amp; download product photos</button>
       <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Looks up each product by its barcode across the four open product databases, then by its full name and size. Nothing is saved until you have seen it. Expect a lot of &ldquo;no verified image found&rdquo; &mdash; most sari-sari lines are in no open database, and an honest blank beats a picture of the wrong thing.</p>
-      <button type="button" class="btn btn-secondary" id="squarePhotosBtn" style="margin-top:8px;">🧹 Tidy photo shapes</button>
-      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Goes through the photos you already have, trims the empty background around the product and puts every one on the same square. The grid then looks even instead of one picture large and the next small. It can&rsquo;t remove a painted scene behind a product &mdash; those are better replaced with a straight-on photo of the real pack.</p>
+      <button type="button" class="btn btn-secondary" id="squarePhotosBtn" style="margin-top:8px;">🧹 Fit photos to the square</button>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Puts every photo you already have onto a square, showing the whole picture &mdash; nothing cropped and nothing enlarged. The space beside a tall or wide photo is filled with the picture&rsquo;s own background instead of a white band, so the grid looks even.</p>
       <div id="squarePhotosResult" style="display:none;font-size:12px;line-height:1.6;margin-top:8px;"></div>
       <div id="finderStorageNote" style="display:none;"></div>
       <div id="finderResults" style="display:none;margin-top:12px;"></div>
@@ -8980,42 +8980,140 @@
   // so every card carries the product at the same size. Colours are left
   // exactly as they are — this changes the framing, nothing else.
   const SQUARE_PHOTO_DIM = 520;
+  // Finds the product inside a photo that has a studio background. The older
+  // detector compares every pixel to one background colour, which fails on the
+  // usual product shot: a soft grey backdrop that shades from light to dark,
+  // and a half-transparent bottle whose colour is the backdrop's. This one
+  // estimates the background separately for each row and each column, from the
+  // pixels at that row's or column's own ends, and also counts local contrast —
+  // a bottle's edges and its label stand out even when its body doesn't.
+  function photoTrimBox(data, w, h){
+    // Luminance, lightly blurred: a phone photo and a re-compressed download
+    // both carry noise, and raw pixel differences would read that noise as
+    // product and trim nothing.
+    const lum = new Float32Array(w * h);
+    for(let i = 0, n = w * h; i < n; i++){
+      lum[i] = 0.299 * data[i*4] + 0.587 * data[i*4+1] + 0.114 * data[i*4+2];
+    }
+    const sm = new Float32Array(w * h);
+    for(let y = 1; y < h - 1; y++){
+      for(let x = 1; x < w - 1; x++){
+        const k = y * w + x;
+        sm[k] = (lum[k] + lum[k-1] + lum[k+1] + lum[k-w] + lum[k+w]) / 5;
+      }
+    }
+    const px = (x, y) => (y * w + x) * 4;
+    // The background estimated per row and per column, from that row's or
+    // column's own ends, so a backdrop that shades from light to dark is still
+    // read as background all the way across.
+    const edge = Math.max(2, Math.round(Math.min(w, h) * 0.02));
+    const rowBg = new Float32Array(h * 3), colBg = new Float32Array(w * 3);
+    for(let y = 0; y < h; y++){
+      let r = 0, g = 0, b = 0, c = 0;
+      for(let x = 0; x < edge; x++){
+        let i = px(x, y); r += data[i]; g += data[i+1]; b += data[i+2]; c++;
+        i = px(w - 1 - x, y); r += data[i]; g += data[i+1]; b += data[i+2]; c++;
+      }
+      rowBg[y*3] = r/c; rowBg[y*3+1] = g/c; rowBg[y*3+2] = b/c;
+    }
+    for(let x = 0; x < w; x++){
+      let r = 0, g = 0, b = 0, c = 0;
+      for(let y = 0; y < edge; y++){
+        let i = px(x, y); r += data[i]; g += data[i+1]; b += data[i+2]; c++;
+        i = px(x, h - 1 - y); r += data[i]; g += data[i+1]; b += data[i+2]; c++;
+      }
+      colBg[x*3] = r/c; colBg[x*3+1] = g/c; colBg[x*3+2] = b/c;
+    }
+    // Both thresholds are set from the picture itself — the middle of the
+    // spread plus a wide margin — so a grainy picture needs a bigger
+    // difference to count as product than a clean one does.
+    const dist = new Float32Array(w * h), grad = new Float32Array(w * h);
+    for(let y = 1; y < h - 1; y++){
+      for(let x = 1; x < w - 1; x++){
+        const i = px(x, y), k = y * w + x;
+        const dr = Math.max(Math.abs(data[i] - rowBg[y*3]), Math.abs(data[i+1] - rowBg[y*3+1]), Math.abs(data[i+2] - rowBg[y*3+2]));
+        const dc = Math.max(Math.abs(data[i] - colBg[x*3]), Math.abs(data[i+1] - colBg[x*3+1]), Math.abs(data[i+2] - colBg[x*3+2]));
+        dist[k] = Math.min(dr, dc);
+        grad[k] = Math.abs(sm[k+1] - sm[k-1]) + Math.abs(sm[k+w] - sm[k-w]);
+      }
+    }
+    const quantile = (arr, q) => {
+      const hist = new Uint32Array(769);
+      let n = 0;
+      for(let i = 0; i < arr.length; i++){ const v = Math.min(768, Math.round(arr[i])); hist[v]++; n++; }
+      let want = Math.round(n * q), acc = 0;
+      for(let v = 0; v < 769; v++){ acc += hist[v]; if(acc >= want) return v; }
+      return 768;
+    };
+    const distThr = Math.max(26, quantile(dist, 0.60) + 26);
+    const gradThr = Math.max(16, quantile(grad, 0.90) * 1.6);
+    const rows = new Uint32Array(h), cols = new Uint32Array(w);
+    for(let y = 1; y < h - 1; y++){
+      for(let x = 1; x < w - 1; x++){
+        const k = y * w + x;
+        if(dist[k] > distThr || grad[k] > gradThr){ rows[y]++; cols[x]++; }
+      }
+    }
+    // A line counts as holding product only if a real share of it does, which
+    // keeps a dust speck or a compression ripple from stretching the box.
+    const rowMin = Math.max(3, Math.round(w * 0.05)), colMin = Math.max(3, Math.round(h * 0.05));
+    let x0 = -1, y0 = -1, x1 = -1, y1 = -1;
+    for(let y = 0; y < h; y++) if(rows[y] >= rowMin){ if(y0 < 0) y0 = y; y1 = y; }
+    for(let x = 0; x < w; x++) if(cols[x] >= colMin){ if(x0 < 0) x0 = x; x1 = x; }
+    if(x0 < 0 || y0 < 0) return null;
+    const frac = ((x1 - x0 + 1) * (y1 - y0 + 1)) / (w * h);
+    // Nothing worth trimming, or the "product" is the whole picture — a
+    // painted scene behind the pack, a photo of a shelf. Leave those alone.
+    if(frac > 0.9 || frac < 0.02) return null;
+    const m = Math.round(Math.min(w, h) * 0.02);
+    return {
+      x: Math.max(0, x0 - m), y: Math.max(0, y0 - m),
+      w: Math.min(w - 1, x1 + m) - Math.max(0, x0 - m) + 1,
+      h: Math.min(h - 1, y1 + m) - Math.max(0, y0 - m) + 1
+    };
+  }
   function squarePhotoFromImage(img){
-    let w = img.width, h = img.height;
+    const w = img.width, h = img.height;
     if(!w || !h) return null;
-    if(w >= h){ if(w > PHOTO_WORK_DIM){ h = Math.round(h * PHOTO_WORK_DIM / w); w = PHOTO_WORK_DIM; } }
-    else { if(h > PHOTO_WORK_DIM){ w = Math.round(w * PHOTO_WORK_DIM / h); h = PHOTO_WORK_DIM; } }
-    const work = document.createElement("canvas");
-    work.width = w; work.height = h;
-    const wctx = work.getContext("2d");
-    wctx.drawImage(img, 0, 0, w, h);
-    let edge = null, box = null;
-    try{
-      const data = wctx.getImageData(0, 0, w, h).data;
-      edge = photoEdgeStats(data, w, h);
-      box = photoContentBox(data, w, h, edge);
-    }catch(err){ /* a tainted canvas — fall back to squaring it as it is */ }
-    const k = img.width / w;
-    const src = box
-      ? { x: Math.round(box.x * k), y: Math.round(box.y * k), w: Math.max(1, Math.round(box.w * k)), h: Math.max(1, Math.round(box.h * k)) }
-      : { x: 0, y: 0, w: img.width, h: img.height };
-    // Already square and already filling its frame — leave it alone rather
-    // than re-encoding it for nothing.
-    if(!box && Math.abs(img.width - img.height) / Math.max(img.width, img.height) < 0.02) return null;
-    const dim = Math.min(SQUARE_PHOTO_DIM, Math.max(src.w, src.h));
-    const inner = Math.round(dim * 0.92);            // a small, equal margin on every card
-    const scale = inner / Math.max(src.w, src.h);
-    const dw = Math.max(1, Math.round(src.w * scale)), dh = Math.max(1, Math.round(src.h * scale));
+    // Already square: the whole picture already fills its box.
+    if(Math.abs(w - h) / Math.max(w, h) < 0.02) return null;
+    const dim = Math.min(SQUARE_PHOTO_DIM, Math.max(w, h));
     const out = document.createElement("canvas");
     out.width = dim; out.height = dim;
-    const octx = out.getContext("2d");
-    // White unless the photo's own background is a definite colour, in which
-    // case padding with it hides the join.
-    octx.fillStyle = (!edge || edge.lum > 232 || edge.sat > 0.35)
-      ? "#FFFFFF" : "rgb(" + Math.round(edge.r) + "," + Math.round(edge.g) + "," + Math.round(edge.b) + ")";
-    octx.fillRect(0, 0, dim, dim);
-    octx.drawImage(img, src.x, src.y, src.w, src.h, Math.round((dim - dw) / 2), Math.round((dim - dh) / 2), dw, dh);
-    return out.toDataURL("image/jpeg", 0.82);
+    const ctx = out.getContext("2d");
+    // The whole photo is kept, at its own proportions — nothing cropped, the
+    // product not enlarged. What fills the space beside it is the photo
+    // itself, blown up to cover the square and blurred, so the picture reads
+    // as one thing instead of a small photo stranded on a white band. Where
+    // blurring isn't available, the colour along the photo's edge is used,
+    // which for a studio backdrop is the backdrop itself.
+    const scaleCover = dim / Math.min(w, h);
+    const cw = Math.ceil(w * scaleCover), ch = Math.ceil(h * scaleCover);
+    let blurred = false;
+    try{
+      if(typeof ctx.filter === "string"){
+        ctx.filter = "blur(" + Math.max(12, Math.round(dim * 0.10)) + "px) brightness(1.06) saturate(0.85)";
+        ctx.drawImage(img, Math.round((dim - cw) / 2), Math.round((dim - ch) / 2), cw, ch);
+        ctx.filter = "none";
+        blurred = true;
+      }
+    }catch(err){ /* older browser — fall through to the flat fill */ }
+    if(!blurred){
+      let edge = null;
+      try{
+        const probe = document.createElement("canvas");
+        probe.width = Math.min(w, 80); probe.height = Math.min(h, 80);
+        const pctx = probe.getContext("2d");
+        pctx.drawImage(img, 0, 0, probe.width, probe.height);
+        edge = photoEdgeStats(pctx.getImageData(0, 0, probe.width, probe.height).data, probe.width, probe.height);
+      }catch(err){ /* can't read it — plain white then */ }
+      ctx.fillStyle = edge ? "rgb(" + Math.round(edge.r) + "," + Math.round(edge.g) + "," + Math.round(edge.b) + ")" : "#FFFFFF";
+      ctx.fillRect(0, 0, dim, dim);
+    }
+    const scaleFit = dim / Math.max(w, h);
+    const dw = Math.max(1, Math.round(w * scaleFit)), dh = Math.max(1, Math.round(h * scaleFit));
+    ctx.drawImage(img, Math.round((dim - dw) / 2), Math.round((dim - dh) / 2), dw, dh);
+    return out.toDataURL("image/jpeg", 0.85);
   }
   function loadImageFromUrl(url){
     return new Promise((resolve, reject) => {
@@ -9032,20 +9130,20 @@
     const list = products.filter(p => hasStoredPhoto(p) && photoDisplaySrc(p));
     const box = $("squarePhotosResult");
     box.style.display = "block";
-    if(!list.length){ box.innerHTML = "No stored photos to tidy yet."; return; }
+    if(!list.length){ box.innerHTML = "No stored photos yet."; return; }
     // Two taps rather than a pop-up: a dismissed confirm() looks exactly like
     // a button that did nothing, which is how the payment bug hid for a week.
     if(!squareArmed){
       squareArmed = true;
-      $("squarePhotosBtn").textContent = "Tap again to tidy " + list.length + " photo" + (list.length === 1 ? "" : "s");
-      box.innerHTML = "Each photo is trimmed and re-centred on a square. The photo it replaces isn't kept, so this can't be undone — but nothing is deleted and no product loses its photo.";
+      $("squarePhotosBtn").textContent = "Tap again to fit " + list.length + " photo" + (list.length === 1 ? "" : "s");
+      box.innerHTML = "Each photo is placed whole on a square, with its own background filling the sides. The photo it replaces isn't kept, so this can't be undone — but nothing is deleted and no product loses its photo.";
       clearTimeout(squareArmTimer);
-      squareArmTimer = setTimeout(() => { squareArmed = false; $("squarePhotosBtn").textContent = "🧹 Tidy photo shapes"; }, 8000);
+      squareArmTimer = setTimeout(() => { squareArmed = false; $("squarePhotosBtn").textContent = "🧹 Fit photos to the square"; }, 8000);
       return;
     }
     clearTimeout(squareArmTimer);
     squareArmed = false;
-    $("squarePhotosBtn").textContent = "🧹 Tidy photo shapes";
+    $("squarePhotosBtn").textContent = "🧹 Fit photos to the square";
     squaringPhotos = true;
     $("squarePhotosBtn").disabled = true;
     let done = 0, skipped = 0, failed = 0;
@@ -9066,7 +9164,7 @@
     }
     squaringPhotos = false;
     $("squarePhotosBtn").disabled = false;
-    box.innerHTML = "<b>" + done + " tidied.</b>" + (skipped ? " " + skipped + " already square." : "") +
+    box.innerHTML = "<b>" + done + " fitted.</b>" + (skipped ? " " + skipped + " were already square." : "") +
       (failed ? " <span style=\"color:var(--danger);\">" + failed + " couldn't be read.</span>" : "") +
       " The Sell screen and the online store follow within a few seconds.";
     renderProductGrid();
@@ -14841,7 +14939,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v81";
+  const APP_VERSION = "v83";
 
   function init(){
     applyRememberedDesign();
