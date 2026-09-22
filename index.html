@@ -161,6 +161,18 @@
     cursor:pointer;
   }
   .sub-unit-btn:active{opacity:.7;}
+  .bulk-btn{background:var(--surface);border-style:dashed;}
+  .bulk-choice{display:grid;grid-template-columns:1fr auto;gap:2px 10px;width:100%;text-align:left;
+    background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:12px 14px;margin:0 0 10px;
+    font:inherit;color:var(--text);cursor:pointer;}
+  .bulk-choice:active{border-color:var(--primary);}
+  .bulk-choice:disabled{opacity:.45;cursor:default;}
+  .bulk-choice .bc-main{font-size:14px;}
+  .bulk-choice .bc-price{font-size:16px;font-weight:800;color:var(--primary-dark);text-align:right;}
+  .bulk-choice .bc-sub{grid-column:1 / -1;font-size:12px;color:var(--text-muted);}
+  .bulk-row{display:grid;grid-template-columns:1.1fr .8fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px;}
+  .bulk-row .field{margin:0;}
+  .bulk-row .bulk-del{background:none;border:0;color:var(--danger);font-size:18px;padding:8px 4px;cursor:pointer;}
   .qty-badge{
     position:absolute;top:8px;right:8px;
     background:var(--primary);color:#fff;
@@ -1530,6 +1542,14 @@
     </div>
     </div>
 
+    <div id="bulkSection">
+      <div class="section-label" style="margin:6px 0 8px;">Wholesale (optional)</div>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:0 0 10px;" id="bulkIntro">Sell a whole case, box or sack at its own price. Stock stays counted in single units: selling one case of 24 takes 24 off.</p>
+      <div id="bulkRows"></div>
+      <button type="button" class="btn btn-secondary" id="addBulkRowBtn" style="margin:2px 0 6px;">+ Add a wholesale unit</button>
+      <div id="bulkCheck" style="font-size:11.5px;line-height:1.5;margin:4px 0 12px;"></div>
+    </div>
+
     <div class="field-row">
       <div class="field">
         <label>Category</label>
@@ -1595,6 +1615,19 @@
     <div class="btn-row">
       <button class="btn btn-primary" id="addStickToCartBtn">Add to cart</button>
     </div>
+  </div>
+</div>
+
+<div class="sheet" id="bulkSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2 id="bulkSheetTitle">Wholesale</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <div class="field">
+      <label>How many</label>
+      <input type="number" id="bulkQtyInput" inputmode="numeric" min="1" step="1" value="1">
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin:-6px 0 12px;">Then tap the one the customer is buying.</p>
+    <div id="bulkChoices"></div>
   </div>
 </div>
 
@@ -2192,13 +2225,17 @@
       <label>Product</label>
       <select id="dl-product"></select>
     </div>
+    <div class="field" id="dl-lotField" style="display:none;">
+      <label>Delivered as</label>
+      <select id="dl-lot"></select>
+    </div>
     <div class="field-row">
       <div class="field">
-        <label>Quantity (packs)</label>
+        <label id="dl-qtyLabel">Quantity (packs)</label>
         <input type="number" id="dl-qty" inputmode="decimal" placeholder="e.g. 12">
       </div>
       <div class="field">
-        <label>Cost per pack (₱)</label>
+        <label id="dl-costLabel">Cost per pack (₱)</label>
         <input type="number" id="dl-unitCost" inputmode="decimal" placeholder="e.g. 58.50">
       </div>
     </div>
@@ -2985,17 +3022,36 @@
     if(!code){ showToast("Enter or scan a barcode first"); return; }
     box.style.display = "block";
     box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Looking up ${escapeHtml(code)}…</div>`;
+    // The databases answer "not found" with HTTP 404. That is an answer, not
+    // a failed connection — an earlier version reported every unknown code as
+    // "couldn't reach the database", which sent owners checking their signal
+    // for no reason.
+    const check = barcodeCheck(code);
+    const notFound = () => {
+      box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);line-height:1.5;">${check.ok
+        ? `${escapeHtml(code)} is a valid ${check.kind} barcode, but it isn't in the free product databases. Cigarettes, local brands and repacked goods usually aren't. Type the name yourself and take a photo.`
+        : `Not in the free product databases. ${escapeHtml(check.note)}`}</div>`;
+    };
+    let res;
     try{
-      const url = "https://world.openfoodfacts.org/api/v2/product/" + encodeURIComponent(code)
-        + ".json?fields=product_name,brands,quantity,image_front_url,image_front_small_url";
-      const res = await fetch(url);
+      const url = OFF_ALL_ENDPOINT + encodeURIComponent(code) + "?product_type=all"
+        + "&fields=product_name,brands,quantity,image_front_url,image_front_small_url,product_type,code";
+      res = await fetch(url, { headers: { "Accept": "application/json" } });
+    }catch(err){
+      // A browser can't always tell "no connection" from "the server said no
+      // without the right headers", so say what is known rather than guess.
+      console.error(err);
+      box.innerHTML = navigator.onLine === false
+        ? `<div style="font-size:12.5px;color:var(--danger);">This phone is offline. Try again when you have signal, or just photograph the item.</div>`
+        : `<div style="font-size:12.5px;color:var(--text-muted);line-height:1.5;">No answer from the product database.${check.ok ? ` The barcode itself is a valid ${check.kind} code.` : " " + escapeHtml(check.note)} If other websites open on this phone, the product most likely just isn't listed — type the name yourself and take a photo.</div>`;
+      return;
+    }
+    try{
+      if(res.status === 404){ notFound(); return; }
       if(!res.ok) throw new Error("status " + res.status);
       const data = await res.json();
-      if(!data || data.status === 0 || !data.product){
-        box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted);">Not in the database — most local and repacked goods won't be. Photograph it instead.</div>`;
-        return;
-      }
-      const pr = data.product;
+      const pr = data && (data.product || (data.products && data.products[0]));
+      if(!pr){ notFound(); return; }
       const name = [pr.brands, pr.product_name, pr.quantity].filter(Boolean).join(" ").trim();
       const img = pr.image_front_url || pr.image_front_small_url || "";
       box.innerHTML = `
@@ -3003,7 +3059,7 @@
           ${img ? `<img src="${img}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px;flex:none;">` : ""}
           <div style="min-width:0;flex:1;">
             <div style="font-size:13px;font-weight:700;">${escapeHtml(name || "(no name on file)")}</div>
-            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Open Food Facts · CC BY-SA</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Open ${pr.product_type === "beauty" ? "Beauty" : pr.product_type === "product" ? "Products" : pr.product_type === "petfood" ? "Pet Food" : "Food"} Facts · CC BY-SA</div>
           </div>
         </div>
         <div class="btn-row" style="margin-top:10px;">
@@ -3016,8 +3072,25 @@
       if(photoBtn) photoBtn.onclick = () => adoptLookupPhoto(img, code);
     }catch(err){
       console.error(err);
-      box.innerHTML = `<div style="font-size:12.5px;color:var(--danger);">Couldn't reach the database — check your connection, or just photograph the item.</div>`;
+      box.innerHTML = `<div style="font-size:12.5px;color:var(--danger);">The database answered with an error (${escapeHtml(String(err.message || err))}). Try again in a minute, or just photograph the item.</div>`;
     }
+  }
+
+  // EAN-13 / EAN-8 / UPC-A check digit. Tells a mistyped or invented code
+  // from a real one that simply isn't in the database.
+  function barcodeCheck(code){
+    const c = String(code || "").replace(/\s+/g, "");
+    if(!/^\d+$/.test(c)) return { ok: false, note: "It isn't a standard product barcode (it has letters or symbols)." };
+    const kinds = { 8: "EAN-8", 12: "UPC-A", 13: "EAN-13", 14: "GTIN-14" };
+    if(!kinds[c.length]) return { ok: false, note: "It has " + c.length + " digits; retail barcodes have 8, 12 or 13. Check it was read correctly." };
+    const digits = c.split("").map(Number);
+    const check = digits.pop();
+    let sum = 0;
+    digits.reverse().forEach((d, i) => { sum += d * (i % 2 === 0 ? 3 : 1); });
+    const want = (10 - (sum % 10)) % 10;
+    return want === check
+      ? { ok: true, kind: kinds[c.length] }
+      : { ok: false, note: "The last digit doesn't match the rest, so it was probably mistyped or misread. Scan it again." };
   }
 
 
@@ -6687,6 +6760,7 @@
         <div class="price">${peso(p.price)}</div>
         <div class="stock${lowClass}">${p.stock <= 0 ? "Out of stock" : formatStock(p.stock) + " in stock"}</div>
         ${p.subUnitsPerPack ? `<button type="button" class="sub-unit-btn" data-subunit-btn>Sell by ${escapeHtml(p.subUnitName || "piece")}</button>` : ""}
+        ${bulkUnitsOf(p).length ? `<button type="button" class="sub-unit-btn bulk-btn" data-bulk-btn>Wholesale · ${escapeHtml(bulkUnitsOf(p).map(b => b.name).join(" / "))}</button>` : ""}
         ${inCartQty ? `<div class="qty-badge">${inCartQty}</div>` : ""}
       `;
       card.onclick = () => addToCart(p);
@@ -6694,6 +6768,8 @@
         const subBtn = card.querySelector("[data-subunit-btn]");
         subBtn.onclick = (e) => { e.stopPropagation(); openStickSheet(p.id); };
       }
+      const bulkBtn = card.querySelector("[data-bulk-btn]");
+      if(bulkBtn) bulkBtn.onclick = (e) => { e.stopPropagation(); openBulkSheet(p.id); };
       grid.appendChild(card);
     });
 
@@ -6703,19 +6779,51 @@
   }
 
   // ---------- Cart ----------
-  // A product's pack stock can be shared between whole-pack sales and per-piece
-  // ("stick") sales, so availability for one unit type has to account for
-  // whatever's already reserved in the cart under the other unit type.
+  // Every way of selling a product draws on the same stock, counted in the
+  // product's own unit (a bottle, a pack, a kilo): single units, pieces broken
+  // out of a pack ("sub"), and wholesale lots — a case of 24, a sack of 50 —
+  // ("bulk"). A cart line's `unit` says which: "pack", "sub", or "bulk:<n>"
+  // where n is how many single units the lot holds. Availability for any one
+  // line is what the stock holds less everything the OTHER lines of the same
+  // product already take.
+  function isBulkUnit(u){ return typeof u === "string" && u.indexOf("bulk:") === 0; }
+  function cartLineBase(c){
+    if(c.unit === "sub") return c.qty / (c.subUnitsPerPack || 1);
+    if(isBulkUnit(c.unit)) return c.qty * (c.unitsPer || 1);
+    return c.qty;
+  }
+  function reservedBase(product, exceptUnit){
+    return cart.filter(c => c.productId === product.id && (c.unit || "pack") !== exceptUnit)
+      .reduce((sum, c) => sum + cartLineBase(c), 0);
+  }
   function availablePacks(product){
-    const subLine = cart.find(c => c.productId === product.id && c.unit === "sub");
-    const reservedFromSub = subLine ? subLine.qty / (product.subUnitsPerPack || 1) : 0;
-    return Math.max(0, product.stock - reservedFromSub);
+    return Math.max(0, product.stock - reservedBase(product, "pack"));
   }
   function availableSubUnits(product){
-    const packLine = cart.find(c => c.productId === product.id && c.unit === "pack");
-    const reservedPacks = packLine ? packLine.qty : 0;
-    const totalSub = product.stock * (product.subUnitsPerPack || 1);
-    return Math.max(0, totalSub - reservedPacks * (product.subUnitsPerPack || 1));
+    return Math.max(0, (product.stock - reservedBase(product, "sub")) * (product.subUnitsPerPack || 1));
+  }
+  function availableBulk(product, unitsPer){
+    const u = Number(unitsPer) || 1;
+    return Math.max(0, Math.floor((product.stock - reservedBase(product, "bulk:" + u)) / u + 1e-9));
+  }
+  // How many of the product's own units one sold line used up. Saved sale,
+  // return and order lines all go through here, so a case of 24 takes 24
+  // bottles off the shelf and costs 24 bottles' worth — everywhere.
+  function itemDivisor(it){
+    if(it && it.unit === "sub") return Number(it.perPack) > 0 ? Number(it.perPack) : 1;
+    if(it && it.unit === "bulk") return Number(it.unitsPer) > 0 ? 1 / Number(it.unitsPer) : 1;
+    return 1;
+  }
+  function itemLineKey(it){
+    return it.productId + "|" + (it.unit || "pack") + (it.unit === "bulk" ? ":" + (Number(it.unitsPer) || 1) : "");
+  }
+  // A product's wholesale lots, cleaned: a name, a size of at least 2 and a
+  // price. Anything malformed is dropped rather than sold wrongly.
+  function bulkUnitsOf(p){
+    const list = p && Array.isArray(p.bulkUnits) ? p.bulkUnits : [];
+    return list.filter(b => b && b.name && Number(b.qty) >= 2 && Number(b.price) >= 0)
+      .map(b => ({ name: String(b.name), qty: Number(b.qty), price: Number(b.price) }))
+      .sort((a, b) => a.qty - b.qty);
   }
 
   function addToCart(product){
@@ -6741,15 +6849,77 @@
     if(item.qty <= 0){
       cart = cart.filter(c => !(c.productId === productId && (c.unit || "pack") === unit));
     } else if(product){
-      const avail = unit === "sub" ? availableSubUnits(product) : availablePacks(product);
+      const avail = unit === "sub" ? availableSubUnits(product)
+        : isBulkUnit(unit) ? availableBulk(product, item.unitsPer)
+        : availablePacks(product);
       if(item.qty > avail){
         item.qty = avail;
         showToast("No more stock available");
+        if(item.qty <= 0) cart = cart.filter(c => c !== item);
       }
     }
     renderCartSheet();
     renderCartBar();
     renderProductGrid();
+  }
+
+  // ---------- Wholesale (case, box, sack) ----------
+  let bulkSheetProductId = null;
+  function openBulkSheet(productId){
+    const p = products.find(x => x.id === productId);
+    const lots = bulkUnitsOf(p);
+    if(!p || !lots.length) return;
+    bulkSheetProductId = productId;
+    const unitWord = p.unit || "piece";
+    $("bulkSheetTitle").textContent = "Wholesale — " + p.name;
+    $("bulkQtyInput").value = 1;
+    const wrap = $("bulkChoices");
+    wrap.innerHTML = "";
+    lots.forEach(b => {
+      const avail = availableBulk(p, b.qty);
+      const single = (Number(p.price) || 0) * b.qty;
+      const save = single - b.price;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "bulk-choice";
+      btn.disabled = avail <= 0;
+      btn.innerHTML = `
+        <span class="bc-main"><b>${escapeHtml(b.name)}</b> of ${formatStock(b.qty)} ${escapeHtml(unitWord)}${b.qty === 1 ? "" : "s"}</span>
+        <span class="bc-price">${peso(b.price)}</span>
+        <span class="bc-sub">${peso(b.price / b.qty)} each${save > 0.004 ? " · saves " + peso(save) : ""} · ${avail > 0 ? avail + " available" : "not enough stock"}</span>`;
+      btn.onclick = () => addBulkToCart(p.id, b);
+      wrap.appendChild(btn);
+    });
+    openSheet("bulkSheet");
+  }
+
+  function addBulkToCart(productId, lot){
+    const p = products.find(x => x.id === productId);
+    if(!p) return;
+    let qty = parseInt($("bulkQtyInput").value, 10);
+    if(isNaN(qty) || qty <= 0){ showToast("Enter how many"); return; }
+    const key = "bulk:" + lot.qty;
+    const existing = cart.find(c => c.productId === p.id && c.unit === key);
+    const avail = availableBulk(p, lot.qty) - (existing ? existing.qty : 0);
+    if(avail <= 0){ showToast("Not enough stock for a whole " + lot.name); return; }
+    if(qty > avail){ qty = avail; showToast("Only " + avail + " available"); }
+    if(existing){
+      existing.qty += qty;
+    } else {
+      cart.push({
+        productId: p.id, unit: key,
+        name: `${p.name} (${lot.name} of ${formatStock(lot.qty)})`,
+        price: lot.price,
+        qty: qty,
+        unitsPer: lot.qty,
+        bulkName: lot.name
+      });
+    }
+    closeSheet("bulkSheet");
+    showToast("Added " + qty + " " + lot.name + (qty === 1 ? "" : "s"));
+    renderProductGrid();
+    renderCartBar();
+    renderCartSheet();
   }
 
   // ---------- Sell by piece ("stick") ----------
@@ -6959,7 +7129,7 @@
       cart.forEach(c => {
         const row = document.createElement("div");
         row.className = "cart-item";
-        const unitLabel = c.unit === "sub" ? `${peso(c.price)} per ${c.subUnitName || "piece"}` : `${peso(c.price)} each`;
+        const unitLabel = c.unit === "sub" ? `${peso(c.price)} per ${c.subUnitName || "piece"}` : isBulkUnit(c.unit) ? `${peso(c.price)} per ${c.bulkName || "lot"} · wholesale` : `${peso(c.price)} each`;
         row.innerHTML = `
           <div class="info">
             <div class="name">${escapeHtml(c.name)}</div>
@@ -7034,8 +7204,9 @@
       name: c.name,
       price: c.price,
       qty: c.qty,
-      unit: c.unit || "pack",
-      perPack: c.unit === "sub" ? (c.subUnitsPerPack || 1) : 1
+      unit: isBulkUnit(c.unit) ? "bulk" : (c.unit || "pack"),
+      perPack: c.unit === "sub" ? (c.subUnitsPerPack || 1) : 1,
+      ...(isBulkUnit(c.unit) ? { unitsPer: c.unitsPer || 1, bulkName: c.bulkName || null } : {})
     }));
     const subtotal = round2(cartSubtotal());
     const bd = (cartDiscount && scpwdActive()) ? scpwdBreakdown(cart) : null;
@@ -7103,7 +7274,7 @@
       // piece quantities into the exact fraction of a pack they represent.
       const stockDeltas = {};
       cart.forEach(c => {
-        const packsUsed = c.unit === "sub" ? (c.qty / (c.subUnitsPerPack || 1)) : c.qty;
+        const packsUsed = cartLineBase(c);
         stockDeltas[c.productId] = (stockDeltas[c.productId] || 0) + packsUsed;
       });
       Object.keys(stockDeltas).forEach(pid => {
@@ -7397,7 +7568,7 @@
         }
         // A line sold by the piece consumes a fraction of a pack, so its cost
         // is the pack cost divided across the pieces in it.
-        const perPack = (it.unit === "sub" && Number(it.perPack)) ? Number(it.perPack) : 1;
+        const perPack = itemDivisor(it);
         stats[id].profit += net - (packCost / perPack) * qty;
       });
     });
@@ -7523,7 +7694,7 @@
           if(it.name) unmeasured.add(it.name);
           return;
         }
-        const perPack = (it.unit === "sub" && Number(it.perPack)) ? Number(it.perPack) : 1;
+        const perPack = itemDivisor(it);
         profit += net - (packCost / perPack) * qty;
       });
     });
@@ -8751,6 +8922,87 @@
     }
   }
 
+  // ---------- Wholesale units in the product form ----------
+  const BULK_MAX = 3;
+  function renderBulkRows(list){
+    const wrap = $("bulkRows");
+    if(!wrap) return;
+    wrap.innerHTML = "";
+    (list || []).forEach(b => addBulkRow(b));
+    updateBulkAddBtn();
+    renderBulkCheck();
+  }
+  function addBulkRow(b){
+    const wrap = $("bulkRows");
+    if(wrap.children.length >= BULK_MAX) return;
+    const row = document.createElement("div");
+    row.className = "bulk-row";
+    row.innerHTML = `
+      <div class="field"><label>Unit</label><input type="text" data-b="name" placeholder="case, box, sack" maxlength="20"></div>
+      <div class="field"><label>How many in it</label><input type="number" data-b="qty" inputmode="decimal" min="2" step="any" placeholder="24"></div>
+      <div class="field"><label>Price (₱)</label><input type="number" data-b="price" inputmode="decimal" min="0" step="any" placeholder="0.00"></div>
+      <button type="button" class="bulk-del" aria-label="Remove">✕</button>`;
+    if(b){
+      row.querySelector('[data-b="name"]').value = b.name || "";
+      row.querySelector('[data-b="qty"]').value = b.qty != null ? b.qty : "";
+      row.querySelector('[data-b="price"]').value = b.price != null ? b.price : "";
+    }
+    row.querySelector(".bulk-del").onclick = () => { row.remove(); updateBulkAddBtn(); renderBulkCheck(); };
+    row.querySelectorAll("input").forEach(i => i.addEventListener("input", renderBulkCheck));
+    wrap.appendChild(row);
+    updateBulkAddBtn();
+  }
+  function updateBulkAddBtn(){
+    const btn = $("addBulkRowBtn");
+    if(btn) btn.style.display = $("bulkRows").children.length >= BULK_MAX ? "none" : "";
+  }
+  // Reads the rows back. Returns { list } or { error } — a half-filled row is
+  // an error, not something to guess at; an empty row is simply ignored.
+  function readBulkRows(){
+    const out = [];
+    const rows = Array.from($("bulkRows").children);
+    for(const row of rows){
+      const name = row.querySelector('[data-b="name"]').value.trim();
+      const qtyRaw = row.querySelector('[data-b="qty"]').value;
+      const priceRaw = row.querySelector('[data-b="price"]').value;
+      if(!name && qtyRaw === "" && priceRaw === "") continue;
+      const qty = parseFloat(qtyRaw), price = parseFloat(priceRaw);
+      if(!name) return { error: "Give the wholesale unit a name (case, box, sack)" };
+      if(isNaN(qty) || qty < 2) return { error: "Say how many are in one " + name + " (2 or more)" };
+      if(isNaN(price) || price <= 0) return { error: "Enter the price for one " + name };
+      if(out.some(o => o.qty === qty)) return { error: "Two wholesale units hold " + qty + " — keep one" };
+      out.push({ name: name.toLowerCase(), qty: Math.round(qty * 1000) / 1000, price: round2(price) });
+    }
+    return { list: out.sort((a, b) => a.qty - b.qty) };
+  }
+  // Tells the owner, while typing, what each lot works out to per unit, how
+  // much the customer saves against buying singly, and — the one that
+  // matters — whether the lot price is under what the goods cost.
+  function renderBulkCheck(){
+    const el = $("bulkCheck");
+    if(!el) return;
+    const r = readBulkRows();
+    const unitWord = ($("pf-unit").value.trim() || "unit");
+    if(r.error || !r.list.length){ el.innerHTML = ""; return; }
+    const single = parseFloat($("pf-price").value) || 0;
+    const cost = (parseFloat($("pf-cost").value) || 0) + (parseFloat($("pf-opcost").value) || 0);
+    el.innerHTML = r.list.map(b => {
+      const each = b.price / b.qty;
+      const parts = [`<b>${escapeHtml(b.name)}</b>: ${peso(each)} per ${escapeHtml(unitWord)}`];
+      if(single > 0){
+        const off = single - each;
+        parts.push(off > 0.004 ? `${Math.round(off / single * 1000) / 10}% below single price` : `not cheaper than buying singly`);
+      }
+      let warn = "";
+      if(cost > 0){
+        const margin = (each - cost) / each * 100;
+        if(each < cost) warn = ` <span style="color:var(--danger);font-weight:700;">— below cost (${peso(cost)}), loses ${peso((cost - each) * b.qty)} per ${escapeHtml(b.name)}</span>`;
+        else parts.push(`margin ${Math.round(margin * 10) / 10}%`);
+      }
+      return `<div>${parts.join(" · ")}${warn}</div>`;
+    }).join("");
+  }
+
   function openProductForm(productId){
     pendingNewBarcode = null;
     editingProductId = productId || null;
@@ -8786,6 +9038,7 @@
     $("pf-subUnitsPerPack").value = p && p.subUnitsPerPack ? p.subUnitsPerPack : "";
     $("pf-subUnitPrice").value = p && p.subUnitPrice != null ? p.subUnitPrice : "";
     toggleSubUnitFields();
+    renderBulkRows(bulkUnitsOf(p));
     renderProductImageSource(p);
     const fp = $("freePhotoPanel");
     if(fp){ fp.style.display = "none"; $("freePhotoResults").innerHTML = ""; $("freePhotoQuery").value = ""; }
@@ -8793,6 +9046,7 @@
     if(lr){ lr.style.display = "none"; lr.innerHTML = ""; }
     $("pf-sku").value = p && p.sku ? p.sku : "";
     $("pf-unit").value = p && p.unit ? p.unit : "";
+    renderBulkCheck();
     $("pf-brand").value = p && p.brand ? p.brand : "";
     $("pf-size").value = p && p.size ? p.size : "";
     currentImageMeta = (p && p.image && typeof p.image === "object") ? p.image : null;
@@ -8819,6 +9073,7 @@
       const c = doc.data();
       if(c.cost != null) $("pf-cost").value = c.cost;
       if(c.opCost != null) $("pf-opcost").value = c.opCost;
+      renderBulkCheck();
       if(c.markup != null) $("pf-markup").value = c.markup;
       if(c.competitorPrice != null) $("pf-competitor").value = c.competitorPrice;
       updatePricingHelper();
@@ -8868,6 +9123,8 @@
       if(isNaN(subUnitsPerPack) || subUnitsPerPack < 2){ showToast("Enter how many pieces per pack (2 or more)"); return; }
       if(isNaN(subUnitPrice) || subUnitPrice < 0){ showToast("Enter a valid price per piece"); return; }
     }
+    const bulkRead = readBulkRows();
+    if(bulkRead.error){ showToast(bulkRead.error); return; }
 
     // The public product record — this is what the online storefront reads, so
     // it deliberately carries NO cost, operating-cost, markup or competitor
@@ -8896,7 +9153,8 @@
       competitorPrice: firebase.firestore.FieldValue.delete(),
       subUnitName: hasSubUnit ? subUnitName : null,
       subUnitsPerPack: hasSubUnit ? subUnitsPerPack : null,
-      subUnitPrice: hasSubUnit ? subUnitPrice : null
+      subUnitPrice: hasSubUnit ? subUnitPrice : null,
+      bulkUnits: bulkRead.list.length ? bulkRead.list : null
     };
     if(barcodeChanged){
       data.barcodeHistory = firebase.firestore.FieldValue.arrayUnion(barcodeHistoryEntry(barcode, barcodeVia));
@@ -9463,12 +9721,12 @@
     const credited = {};
     returnsAgainst(sale.id).forEach(r => {
       (r.items || []).forEach(it => {
-        const k = it.productId + "|" + (it.unit || "pack");
+        const k = itemLineKey(it);
         credited[k] = (credited[k] || 0) + (Number(it.qty) || 0);
       });
     });
     return (sale.items || []).map((it, i) => {
-      const k = it.productId + "|" + (it.unit || "pack");
+      const k = itemLineKey(it);
       const already = credited[k] || 0;
       const left = Math.max(0, (Number(it.qty) || 0) - already);
       credited[k] = Math.max(0, already - (Number(it.qty) || 0));
@@ -9504,7 +9762,7 @@
     lines.forEach(({ i, it, left }) => {
       const row = document.createElement("div");
       row.style.cssText = "display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);";
-      const unitLabel = it.unit === "sub" ? " per piece" : "";
+      const unitLabel = it.unit === "sub" ? " per piece" : it.unit === "bulk" ? " per " + (it.bulkName || "lot") : "";
       row.innerHTML = `
         <div style="flex:1;min-width:0;">
           <div style="font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(it.name || "")}</div>
@@ -9535,7 +9793,8 @@
       if(q <= 0) return;
       items.push({
         productId: it.productId, name: it.name, price: it.price,
-        qty: q, unit: it.unit || "pack", perPack: it.perPack || 1
+        qty: q, unit: it.unit || "pack", perPack: it.perPack || 1,
+        ...(it.unit === "bulk" ? { unitsPer: Number(it.unitsPer) || 1, bulkName: it.bulkName || null } : {})
       });
       amount += (Number(it.price) || 0) * q;
     });
@@ -9645,7 +9904,7 @@
       if(restock){
         const deltas = {};
         d.items.forEach(it => {
-          const packs = it.unit === "sub" ? (it.qty / (it.perPack || 1)) : it.qty;
+          const packs = (Number(it.qty) || 0) / itemDivisor(it);
           deltas[it.productId] = (deltas[it.productId] || 0) + packs;
         });
         Object.keys(deltas).forEach(pid => {
@@ -10675,7 +10934,7 @@
       const batch = db.batch();
       if(holds){
         (o.items || []).forEach(it => {
-          const perPack = (it.unit === "sub" && Number(it.perPack) > 0) ? Number(it.perPack) : 1;
+          const perPack = itemDivisor(it);
           batch.update(db.collection("products").doc(it.productId), { stock: firebase.firestore.FieldValue.increment((Number(it.qty) || 0) / perPack) });
         });
       }
@@ -10725,7 +10984,7 @@
           // An online line bought by the piece (tingi) consumes a fraction of a
           // pack — 4 sticks from a 20-stick pack is 0.2, not 4. Deducting the
           // raw quantity here would destroy the stock count.
-          const perPack = (it.unit === "sub" && Number(it.perPack) > 0) ? Number(it.perPack) : 1;
+          const perPack = itemDivisor(it);
           deltas[it.productId] = (deltas[it.productId] || 0) + ((Number(it.qty) || 0) / perPack);
         });
         Object.keys(deltas).forEach(pid => {
@@ -11543,7 +11802,7 @@
       const sign = saleSign(s);
       for(const it of (s.items || [])){
         if(it.productId !== productId) continue;
-        const perPack = it.unit === "sub" ? (it.perPack || 1) : 1;
+        const perPack = itemDivisor(it);
         total += sign * (Number(it.qty) || 0) / perPack;
       }
     }
@@ -11577,7 +11836,7 @@
       const sign = saleSign(s);
       for(const it of (s.items || [])){
         if(it.productId !== p.id) continue;
-        const perPack = it.unit === "sub" ? (it.perPack || 1) : 1;
+        const perPack = itemDivisor(it);
         const qty = sign * (Number(it.qty) || 0);
         rev += (Number(it.price) || 0) * qty;
         packs += qty / perPack;
@@ -11624,7 +11883,7 @@
       if(isReturnDoc(s)) continue;
       for(const it of (s.items || [])){
         if(it.productId !== productId) continue;
-        const perPack = it.unit === "sub" ? (it.perPack || 1) : 1;
+        const perPack = itemDivisor(it);
         add(s.timestamp, -((Number(it.qty) || 0) / perPack));
       }
     }
@@ -11733,7 +11992,7 @@
         const sign = saleSign(s);
         for(const it of (s.items || [])){
           if(it.productId !== productId) continue;
-          const perPack = it.unit === "sub" ? (it.perPack || 1) : 1;
+          const perPack = itemDivisor(it);
           total += sign * (Number(it.qty) || 0) / perPack;
         }
       }
@@ -12822,7 +13081,7 @@
         revenue += net;
         const packCost = it.productId ? costAtDate(it.productId, s.timestamp) : null;
         if(packCost == null || !isFinite(packCost) || packCost <= 0){ unmeasuredRevenue += net; return; }
-        const perPack = (it.unit === "sub" && Number(it.perPack)) ? Number(it.perPack) : 1;
+        const perPack = itemDivisor(it);
         profit += net - (packCost / perPack) * qty;
       });
     });
@@ -13513,6 +13772,7 @@
     receivingOrderId = null;
     fillSupplierSelect($("dl-supplier"), supplierId);
     fillProductSelect($("dl-product"));
+    refreshDeliveryLot();
     $("dl-date").value = todayISO();
     $("dl-ref").value = "";
     $("dl-qty").value = "";
@@ -13538,19 +13798,47 @@
       el.innerHTML = `<b>Due ${due}</b> — ${days} day${days === 1 ? "" : "s"} from delivery.`;
     }
   }
+  // A supplier bills by the case or the sack. Choosing the lot here lets the
+  // owner type exactly what is on the DR — 3 cases at ₱540 — and the POS
+  // books 72 bottles at ₱22.50, so stock and cost stay in single units.
+  function refreshDeliveryLot(){
+    const p = products.find(x => x.id === $("dl-product").value);
+    const lots = bulkUnitsOf(p);
+    const unitWord = (p && p.unit) || "pack";
+    const sel = $("dl-lot");
+    sel.innerHTML = `<option value="1">Single ${escapeHtml(unitWord)}</option>` +
+      lots.map(b => `<option value="${b.qty}" data-name="${escapeHtml(b.name)}">${escapeHtml(b.name)} of ${formatStock(b.qty)}</option>`).join("");
+    $("dl-lotField").style.display = lots.length ? "" : "none";
+    updateDeliveryLotLabels();
+  }
+  function updateDeliveryLotLabels(){
+    const opt = $("dl-lot").selectedOptions[0];
+    const per = opt ? Number(opt.value) || 1 : 1;
+    const word = per > 1 ? (opt.dataset.name || "lot") + "s" : "packs";
+    $("dl-qtyLabel").textContent = "Quantity (" + word + ")";
+    $("dl-costLabel").textContent = "Cost per " + (per > 1 ? (opt.dataset.name || "lot") : "pack") + " (₱)";
+  }
   function addDeliveryLine(){
     const pid = $("dl-product").value;
-    const qty = parseFloat($("dl-qty").value);
-    const unitCost = parseFloat($("dl-unitCost").value);
+    let qty = parseFloat($("dl-qty").value);
+    let unitCost = parseFloat($("dl-unitCost").value);
     const p = products.find(x => x.id === pid);
     if(!p){ showToast("Choose a product"); return; }
     if(isNaN(qty) || qty <= 0){ showToast("Enter a quantity"); return; }
-    if(isNaN(unitCost) || unitCost < 0){ showToast("Enter the cost per pack"); return; }
+    if(isNaN(unitCost) || unitCost < 0){ showToast("Enter the cost"); return; }
+    const lotOpt = $("dl-lotField").style.display === "none" ? null : $("dl-lot").selectedOptions[0];
+    const per = lotOpt ? Number(lotOpt.value) || 1 : 1;
+    let receivedAs = null;
+    if(per > 1){
+      receivedAs = { name: lotOpt.dataset.name || "lot", count: qty, per, costEach: unitCost };
+      qty = qty * per;
+      unitCost = unitCost / per;
+    }
     const expiry = ($("dl-expiry").value || "").trim() || null;
     if(p.perishable && !expiry){
       if(!confirm(p.name + " is marked as something that goes off, but no expiry date was entered.\n\nAdd it without a date?")) return;
     }
-    deliveryLines.push({ productId: pid, name: p.name, qty, unitCost, expiry });
+    deliveryLines.push({ productId: pid, name: p.name, qty, unitCost, expiry, ...(receivedAs ? { receivedAs } : {}) });
     $("dl-qty").value = "";
     $("dl-unitCost").value = "";
     $("dl-expiry").value = "";
@@ -13585,7 +13873,7 @@
         }
         return `<div class="dl-line">
           <div class="n">${escapeHtml(l.name)}${l.expiry ? `<div class="cost-change">Expires ${escapeHtml(l.expiry)}</div>` : ""}${costNote}</div>
-          <div class="q">${formatStock(l.qty)} × ${peso(l.unitCost)}${
+          <div class="q">${l.receivedAs ? `${formatStock(l.receivedAs.count)} ${escapeHtml(l.receivedAs.name)}${l.receivedAs.count === 1 ? "" : "s"} × ${peso(l.receivedAs.costEach)}<div class="cost-change">= ${formatStock(l.qty)} × ${peso(l.unitCost)}</div>` : `${formatStock(l.qty)} × ${peso(l.unitCost)}`}${
             l.orderedQty != null && Math.abs(l.orderedQty - l.qty) > 0.0001
               ? `<div class="cost-change" style="color:var(--danger);">${l.qty < l.orderedQty ? "short " + formatStock(l.orderedQty - l.qty) : "over " + formatStock(l.qty - l.orderedQty)} of ${formatStock(l.orderedQty)} ordered</div>`
               : (l.orderedQty != null ? `<div class="cost-change">as ordered</div>` : "")
@@ -13642,6 +13930,7 @@
       items: landedLines.map(l => ({
         productId: l.productId, name: l.name, qty: l.qty,
         unitCost: l.unitCost,
+        ...(l.receivedAs ? { receivedAs: l.receivedAs } : {}),
         freightShare: l.freightShare,
         landedUnitCost: l.landedUnitCost,
         expiry: l.expiry || null
@@ -14139,6 +14428,10 @@
     $("removePhotoBtn").onclick = () => { currentImageData = null; currentThumbData = null; currentImageCredit = null; currentImageMeta = null; updatePhotoPreview(); };
     ["pf-price","pf-cost","pf-opcost","pf-markup","pf-competitor"].forEach(id => { $(id).oninput = updatePricingHelper; });
     $("pf-hasSubUnit").onchange = toggleSubUnitFields;
+    $("dl-product").addEventListener("change", refreshDeliveryLot);
+    $("dl-lot").addEventListener("change", updateDeliveryLotLabels);
+    $("addBulkRowBtn").onclick = () => { addBulkRow(null); const last = $("bulkRows").lastElementChild; if(last) last.querySelector("input").focus(); };
+    ["pf-price","pf-cost","pf-opcost","pf-unit"].forEach(id => { const el = $(id); if(el) el.addEventListener("input", renderBulkCheck); });
     $("addStickToCartBtn").onclick = addStickToCart;
     $("saveStockBtn").onclick = saveStockAdjust;
     $("marginSortSelect").onchange = (e) => { marginSort = e.target.value; renderMarginReport(); };
@@ -14368,7 +14661,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v75";
+  const APP_VERSION = "v77";
 
   function init(){
     applyRememberedDesign();
