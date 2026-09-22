@@ -194,6 +194,23 @@
     position:absolute;inset:0;
     width:100%;height:100%;object-fit:cover;display:block;
   }
+  /* Photo fitting. Every product box is a square, but photos come in every
+     shape — a long sachet, a tall bottle, a 4:3 phone shot. Cropping them all
+     to fill the square cuts the label off a sachet; shrinking them all to fit
+     leaves square photos floating in empty space. So each photo is measured
+     when it loads (data-shape, set in fitProductPhoto) and:
+       - near-square photos fill the box edge to edge;
+       - wide or tall ones are shown whole, centred on white with a margin,
+         like a product on a shelf.
+     The owner can override this in Store name & design. */
+  .thumb img, .inv-thumb img{transition:opacity .15s ease;}
+  .thumb img[data-shape="wide"], .thumb img[data-shape="tall"],
+  .inv-thumb img[data-shape="wide"], .inv-thumb img[data-shape="tall"]{
+    object-fit:contain;padding:7%;background:#fff;
+  }
+  .thumb:has(img[data-shape]){background:#fff;}
+  :root[data-photo-fit="whole"] .thumb img, :root[data-photo-fit="whole"] .inv-thumb img{object-fit:contain;padding:7%;background:#fff;}
+  :root[data-photo-fit="fill"] .thumb img, :root[data-photo-fit="fill"] .inv-thumb img{object-fit:cover;padding:0;}
   /* The category tile that stands in for a missing photo. It takes the shop's
      own colour, so changing the theme restyles every one of them at once. */
   .cat-tile{
@@ -215,7 +232,7 @@
     background:var(--bg);border:1px solid var(--border);
     display:flex;align-items:center;justify-content:center;
   }
-  .photo-preview img{width:100%;height:100%;object-fit:cover;display:none;}
+  .photo-preview img{width:100%;height:100%;object-fit:contain;background:#fff;display:none;}
   .photo-preview .placeholder{font-size:28px;opacity:.35;}
   .photo-picker-actions{display:flex;flex-direction:column;gap:8px;flex:1;}
   .photo-picker-actions .btn{margin:0;padding:9px;font-size:13px;}
@@ -1560,6 +1577,11 @@
         <input type="number" id="pf-threshold" inputmode="numeric" placeholder="5">
       </div>
     </div>
+    <label style="display:flex;align-items:flex-start;gap:9px;font-size:13px;margin:0 0 4px;">
+      <input type="checkbox" id="pf-hideOnline" style="width:auto;margin-top:2px;">
+      <span>Counter only — keep this off the online store<br><span id="pf-hideOnlineNote" style="font-size:11px;color:var(--text-muted);">Still sold here at the till; customers online never see it.</span></span>
+    </label>
+    <div style="height:10px;"></div>
     <div class="field" id="pf-scpwdField">
       <label>Senior / PWD discount</label>
       <select id="pf-scpwd">
@@ -2127,8 +2149,9 @@
     <div class="field">
       <label>Product photos</label>
       <select id="ds-photoFit">
-        <option value="fill">Fill the box — crop the edges</option>
-        <option value="whole">Show the whole photo</option>
+        <option value="auto">Automatic — fill square photos, show long ones whole (recommended)</option>
+        <option value="fill">Always fill the box — crop the edges</option>
+        <option value="whole">Always show the whole photo</option>
       </select>
     </div>
     <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:-4px 0 10px;"><b>Fill</b> looks tidiest when photos are square and well cropped. <b>Whole photo</b> never cuts anything off — better for tall bottles or packs photographed at odd sizes, at the cost of some empty space around them.</p>
@@ -3056,7 +3079,7 @@
       const img = pr.image_front_url || pr.image_front_small_url || "";
       box.innerHTML = `
         <div style="display:flex;gap:10px;align-items:center;">
-          ${img ? `<img src="${img}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px;flex:none;">` : ""}
+          ${img ? `<img src="${img}" alt="" style="width:56px;height:56px;object-fit:contain;background:#fff;border:1px solid var(--border);border-radius:8px;flex:none;">` : ""}
           <div style="min-width:0;flex:1;">
             <div style="font-size:13px;font-weight:700;">${escapeHtml(name || "(no name on file)")}</div>
             <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Open ${pr.product_type === "beauty" ? "Beauty" : pr.product_type === "product" ? "Products" : pr.product_type === "petfood" ? "Pet Food" : "Food"} Facts · CC BY-SA</div>
@@ -3320,6 +3343,28 @@
     // Photos stored the old way, straight onto the record as data.
     return typeof p.image === "string" && p.image.indexOf("data:image/") === 0;
   }
+
+  // "fill" used to be the only default, so a stored "fill" was never really a
+  // choice — it is read as automatic. Choosing "Always fill" now saves
+  // "fillAlways", which is honoured.
+  function photoFitSetting(){
+    const v = designSettings && designSettings.photoFit;
+    if(v === "whole") return "whole";
+    if(v === "fillAlways") return "fill";
+    return "auto";
+  }
+  const PHOTO_SQUARE_MIN = 0.78, PHOTO_SQUARE_MAX = 1.28;
+  function fitProductPhoto(img){
+    if(!img || !img.naturalWidth || !img.naturalHeight) return;
+    const r = img.naturalWidth / img.naturalHeight;
+    img.dataset.shape = r > PHOTO_SQUARE_MAX ? "wide" : r < PHOTO_SQUARE_MIN ? "tall" : "square";
+  }
+  // One listener for every product photo on every screen, including ones
+  // added later: "load" doesn't bubble, but it can be caught on the way down.
+  document.addEventListener("load", (e) => {
+    const t = e.target;
+    if(t && t.tagName === "IMG" && t.closest && t.closest(".thumb, .inv-thumb, .photo-preview")) fitProductPhoto(t);
+  }, true);
 
   function photoDisplaySrc(p){
     if(!p) return "";
@@ -4052,7 +4097,7 @@
         const thumb = h.thumbnail || h.url || "";
         const lic = String(h.license || "").toUpperCase() + (h.license_version ? " " + h.license_version : "");
         return `<button type="button" class="free-photo-hit" data-i="${i}" style="padding:0;border:1px solid var(--border);border-radius:8px;background:var(--surface);overflow:hidden;text-align:left;cursor:pointer;">
-          <img src="${escapeHtml(thumb)}" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">
+          <img src="${escapeHtml(thumb)}" alt="" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:contain;background:#fff;display:block;">
           <span style="display:block;font-size:9.5px;color:var(--text-muted);padding:4px 5px;line-height:1.3;">${escapeHtml(lic || "open licence")}<br>${escapeHtml((h.creator || "unknown").slice(0,18))}</span>
         </button>`;
       }).join("") + `</div>`;
@@ -5889,7 +5934,7 @@
     $("ds-font").value = designSettings.fontStyle || "system";
     $("ds-corners").value = designSettings.corners || "soft";
     $("ds-density").value = designSettings.density || "auto";
-    $("ds-photoFit").value = designSettings.photoFit || "fill";
+    $("ds-photoFit").value = photoFitSetting();
     $("ds-watermark").checked = designSettings.watermark !== false;
     $("ds-logoOnTill").checked = designSettings.logoOnTill === true;
     $("ds-minDelivery").value = designSettings.minOrderDelivery != null ? designSettings.minOrderDelivery : "";
@@ -5911,7 +5956,7 @@
       fontStyle: $("ds-font").value,
       corners: $("ds-corners").value,
       density: $("ds-density").value,
-      photoFit: $("ds-photoFit").value,
+      photoFit: ({ fill: "fillAlways", whole: "whole" })[$("ds-photoFit").value] || "auto",
       watermark: $("ds-watermark").checked,
       logoOnTill: $("ds-logoOnTill").checked,
       logo: currentLogoData || null,
@@ -6247,6 +6292,7 @@
     db.collection("settings").doc("design").onSnapshot((doc) => {
       designSettings = doc.exists ? Object.assign({ storeName:"", tagline:"", primaryColor:"#3A2160", logo:null }, doc.data()) : { storeName:"", tagline:"", primaryColor:"#3A2160", logo:null };
       applyDesignSettings();
+      document.documentElement.setAttribute("data-photo-fit", photoFitSetting());
       rememberDesign();
       renderDesignSummary();
       renderFeatureToggles();
@@ -7380,7 +7426,7 @@
         <div class="inv-thumb">${photoDisplaySrc(p) ? `<img src="${photoDisplaySrc(p)}" alt="" loading="lazy">` : productPlaceholder(p)}</div>
         <div class="info">
           <div class="name">${escapeHtml(p.name)}</div>
-          <div class="meta">${p.sku ? escapeHtml(p.sku) + " · " : ""}${p.localName ? escapeHtml(p.localName) + " · " : ""}${peso(p.price)}${p.unit ? " / " + escapeHtml(p.unit) : ""} · ${escapeHtml(p.category || "Uncategorized")}${
+          <div class="meta">${p.sku ? escapeHtml(p.sku) + " · " : ""}${p.localName ? escapeHtml(p.localName) + " · " : ""}${peso(p.price)}${p.unit ? " / " + escapeHtml(p.unit) : ""} · ${escapeHtml(p.category || "Uncategorized")}${(p.hideOnline || isTobacco(p)) ? " · counter only" : ""}${
             m ? ` · <span class="${marginClass(m)}" style="font-weight:700;">${marginPctText(m)} margin</span>` : ``
           }</div>
         </div>
@@ -8922,6 +8968,29 @@
     }
   }
 
+  // ---------- Counter-only products (tobacco and anything the owner picks) ----------
+  // RA 9211 bans advertising tobacco online, and a storefront card with a
+  // photo and a price is advertising. The storefront applies the same test
+  // (keep TOBACCO_RE identical in both files) and also honours the flags
+  // saved here, so a cigarette brand the pattern doesn't know is still kept
+  // off once its category says "Cigarettes".
+  const TOBACCO_RE = /\b(cigarettes?|cigars?|cigarillos?|sigarilyo|tobacco|tabako|vapes?|vaping|e-?cig(arette)?s?|e-?liquids?|heated tobacco|iqos|heets|terea|marlboro|winston|pall mall|chesterfield|lucky strike|philip morris|camel (filters?|blue|lights?))\b/i;
+  function isTobacco(p){
+    return !!p && (p.tobacco === true || TOBACCO_RE.test(String(p.category || "")) || TOBACCO_RE.test(String(p.name || "")) || TOBACCO_RE.test(String(p.localName || "")));
+  }
+  function updateHideOnlineField(){
+    const cb = $("pf-hideOnline"), note = $("pf-hideOnlineNote");
+    if(!cb) return;
+    const tob = isTobacco({ name: $("pf-name").value, category: $("pf-category").value, localName: $("pf-localName").value });
+    if(tob){
+      cb.checked = true; cb.disabled = true;
+      note.innerHTML = "<b>Tobacco — never shown online.</b> RA 9211 bans advertising tobacco on the internet. You can still sell it here.";
+    } else {
+      cb.disabled = false;
+      note.textContent = "Still sold here at the till; customers online never see it.";
+    }
+  }
+
   // ---------- Wholesale units in the product form ----------
   const BULK_MAX = 3;
   function renderBulkRows(list){
@@ -9013,6 +9082,8 @@
     $("pf-price").value = p ? p.price : "";
     $("pf-stock").value = p ? formatStock(p.stock) : "";
     $("pf-category").value = p ? (p.category || "") : "";
+    $("pf-hideOnline").checked = !!(p && p.hideOnline);
+    updateHideOnlineField();
     const supSel = $("pf-supplier");
     if(supSel){
       supSel.innerHTML = `<option value="">No supplier set</option>` +
@@ -9154,7 +9225,9 @@
       subUnitName: hasSubUnit ? subUnitName : null,
       subUnitsPerPack: hasSubUnit ? subUnitsPerPack : null,
       subUnitPrice: hasSubUnit ? subUnitPrice : null,
-      bulkUnits: bulkRead.list.length ? bulkRead.list : null
+      bulkUnits: bulkRead.list.length ? bulkRead.list : null,
+      hideOnline: $("pf-hideOnline").checked || isTobacco({ name, category: $("pf-category").value, localName: $("pf-localName").value }),
+      tobacco: isTobacco({ name, category: $("pf-category").value, localName: $("pf-localName").value })
     };
     if(barcodeChanged){
       data.barcodeHistory = firebase.firestore.FieldValue.arrayUnion(barcodeHistoryEntry(barcode, barcodeVia));
@@ -14429,6 +14502,7 @@
     ["pf-price","pf-cost","pf-opcost","pf-markup","pf-competitor"].forEach(id => { $(id).oninput = updatePricingHelper; });
     $("pf-hasSubUnit").onchange = toggleSubUnitFields;
     $("dl-product").addEventListener("change", refreshDeliveryLot);
+    ["pf-name","pf-category","pf-localName"].forEach(id => { const el = $(id); if(el) el.addEventListener("input", updateHideOnlineField); });
     $("dl-lot").addEventListener("change", updateDeliveryLotLabels);
     $("addBulkRowBtn").onclick = () => { addBulkRow(null); const last = $("bulkRows").lastElementChild; if(last) last.querySelector("input").focus(); };
     ["pf-price","pf-cost","pf-opcost","pf-unit"].forEach(id => { const el = $(id); if(el) el.addEventListener("input", renderBulkCheck); });
@@ -14661,7 +14735,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v77";
+  const APP_VERSION = "v80";
 
   function init(){
     applyRememberedDesign();
