@@ -3372,7 +3372,12 @@
     if(v === "fillAlways") return "fill";
     return "auto";
   }
-  const PHOTO_SQUARE_MIN = 0.78, PHOTO_SQUARE_MAX = 1.28;
+  // How far from square a photo may be and still be allowed to fill the box.
+  // Inside this band the crop is a sliver off two edges — a scene photo loses
+  // some kitchen, not the product — and the card looks clean with no bands
+  // beside it. Outside it, a long sachet or a tall bottle would lose its ends,
+  // so the whole photo is shown with its own blurred copy filling the space.
+  const PHOTO_SQUARE_MIN = 0.68, PHOTO_SQUARE_MAX = 1.47;
   function fitProductPhoto(img){
     if(!img || !img.naturalWidth || !img.naturalHeight) return;
     const r = img.naturalWidth / img.naturalHeight;
@@ -14963,7 +14968,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v84";
+  const APP_VERSION = "v85";
 
   function init(){
     applyRememberedDesign();
