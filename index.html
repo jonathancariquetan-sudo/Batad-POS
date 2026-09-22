@@ -1090,6 +1090,9 @@
       <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Walk the shelf and scan each item. The POS asks which product it is, saves the barcode, and checks straight away whether the open databases hold a real photo of it. This is what the photo finder needs to work &mdash; it can&rsquo;t look anything up without a barcode.</p>
       <button type="button" class="btn btn-primary" id="finderBtn" style="margin-top:8px;">🔎 Find &amp; download product photos</button>
       <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Looks up each product by its barcode across the four open product databases, then by its full name and size. Nothing is saved until you have seen it. Expect a lot of &ldquo;no verified image found&rdquo; &mdash; most sari-sari lines are in no open database, and an honest blank beats a picture of the wrong thing.</p>
+      <button type="button" class="btn btn-secondary" id="squarePhotosBtn" style="margin-top:8px;">🧹 Tidy photo shapes</button>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Goes through the photos you already have, trims the empty background around the product and puts every one on the same square. The grid then looks even instead of one picture large and the next small. It can&rsquo;t remove a painted scene behind a product &mdash; those are better replaced with a straight-on photo of the real pack.</p>
+      <div id="squarePhotosResult" style="display:none;font-size:12px;line-height:1.6;margin-top:8px;"></div>
       <div id="finderStorageNote" style="display:none;"></div>
       <div id="finderResults" style="display:none;margin-top:12px;"></div>
       <div id="photoSamples" style="display:none;margin-top:12px;"></div>
@@ -8968,6 +8971,108 @@
     }
   }
 
+  // ---------- Making existing photos the same shape ----------
+  // Photos arrive from everywhere: a supplier's wide product shot, a phone
+  // picture in portrait, a database image with a grey studio border. Each one
+  // fits its box correctly and the grid still looks uneven, because the
+  // products inside them are drawn at different sizes. This trims the
+  // background the photo came with and re-centres the product on one square,
+  // so every card carries the product at the same size. Colours are left
+  // exactly as they are — this changes the framing, nothing else.
+  const SQUARE_PHOTO_DIM = 520;
+  function squarePhotoFromImage(img){
+    let w = img.width, h = img.height;
+    if(!w || !h) return null;
+    if(w >= h){ if(w > PHOTO_WORK_DIM){ h = Math.round(h * PHOTO_WORK_DIM / w); w = PHOTO_WORK_DIM; } }
+    else { if(h > PHOTO_WORK_DIM){ w = Math.round(w * PHOTO_WORK_DIM / h); h = PHOTO_WORK_DIM; } }
+    const work = document.createElement("canvas");
+    work.width = w; work.height = h;
+    const wctx = work.getContext("2d");
+    wctx.drawImage(img, 0, 0, w, h);
+    let edge = null, box = null;
+    try{
+      const data = wctx.getImageData(0, 0, w, h).data;
+      edge = photoEdgeStats(data, w, h);
+      box = photoContentBox(data, w, h, edge);
+    }catch(err){ /* a tainted canvas — fall back to squaring it as it is */ }
+    const k = img.width / w;
+    const src = box
+      ? { x: Math.round(box.x * k), y: Math.round(box.y * k), w: Math.max(1, Math.round(box.w * k)), h: Math.max(1, Math.round(box.h * k)) }
+      : { x: 0, y: 0, w: img.width, h: img.height };
+    // Already square and already filling its frame — leave it alone rather
+    // than re-encoding it for nothing.
+    if(!box && Math.abs(img.width - img.height) / Math.max(img.width, img.height) < 0.02) return null;
+    const dim = Math.min(SQUARE_PHOTO_DIM, Math.max(src.w, src.h));
+    const inner = Math.round(dim * 0.92);            // a small, equal margin on every card
+    const scale = inner / Math.max(src.w, src.h);
+    const dw = Math.max(1, Math.round(src.w * scale)), dh = Math.max(1, Math.round(src.h * scale));
+    const out = document.createElement("canvas");
+    out.width = dim; out.height = dim;
+    const octx = out.getContext("2d");
+    // White unless the photo's own background is a definite colour, in which
+    // case padding with it hides the join.
+    octx.fillStyle = (!edge || edge.lum > 232 || edge.sat > 0.35)
+      ? "#FFFFFF" : "rgb(" + Math.round(edge.r) + "," + Math.round(edge.g) + "," + Math.round(edge.b) + ")";
+    octx.fillRect(0, 0, dim, dim);
+    octx.drawImage(img, src.x, src.y, src.w, src.h, Math.round((dim - dw) / 2), Math.round((dim - dh) / 2), dw, dh);
+    return out.toDataURL("image/jpeg", 0.82);
+  }
+  function loadImageFromUrl(url){
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      if(!/^data:/.test(url)) img.crossOrigin = "anonymous";
+      img.src = url;
+    });
+  }
+  let squaringPhotos = false, squareArmed = false, squareArmTimer = null;
+  async function squareAllPhotos(){
+    if(squaringPhotos) return;
+    const list = products.filter(p => hasStoredPhoto(p) && photoDisplaySrc(p));
+    const box = $("squarePhotosResult");
+    box.style.display = "block";
+    if(!list.length){ box.innerHTML = "No stored photos to tidy yet."; return; }
+    // Two taps rather than a pop-up: a dismissed confirm() looks exactly like
+    // a button that did nothing, which is how the payment bug hid for a week.
+    if(!squareArmed){
+      squareArmed = true;
+      $("squarePhotosBtn").textContent = "Tap again to tidy " + list.length + " photo" + (list.length === 1 ? "" : "s");
+      box.innerHTML = "Each photo is trimmed and re-centred on a square. The photo it replaces isn't kept, so this can't be undone — but nothing is deleted and no product loses its photo.";
+      clearTimeout(squareArmTimer);
+      squareArmTimer = setTimeout(() => { squareArmed = false; $("squarePhotosBtn").textContent = "🧹 Tidy photo shapes"; }, 8000);
+      return;
+    }
+    clearTimeout(squareArmTimer);
+    squareArmed = false;
+    $("squarePhotosBtn").textContent = "🧹 Tidy photo shapes";
+    squaringPhotos = true;
+    $("squarePhotosBtn").disabled = true;
+    let done = 0, skipped = 0, failed = 0;
+    for(let i = 0; i < list.length; i++){
+      const p = list[i];
+      box.innerHTML = "Working… " + (i + 1) + " of " + list.length + " · " + escapeHtml(p.name || "");
+      try{
+        const img = await loadImageFromUrl(photoDisplaySrc(p));
+        const url = squarePhotoFromImage(img);
+        if(!url){ skipped++; continue; }
+        const im = p.image;
+        const data = (im && typeof im === "object")
+          ? { image: Object.assign({}, im, { inlineThumb: url, thumbnailUrl: null }) }
+          : { image: url };
+        await db.collection("products").doc(p.id).update(data);
+        done++;
+      }catch(err){ console.warn("couldn't tidy", p.name, err); failed++; }
+    }
+    squaringPhotos = false;
+    $("squarePhotosBtn").disabled = false;
+    box.innerHTML = "<b>" + done + " tidied.</b>" + (skipped ? " " + skipped + " already square." : "") +
+      (failed ? " <span style=\"color:var(--danger);\">" + failed + " couldn't be read.</span>" : "") +
+      " The Sell screen and the online store follow within a few seconds.";
+    renderProductGrid();
+    renderInventory();
+  }
+
   // ---------- Counter-only products (tobacco and anything the owner picks) ----------
   // RA 9211 bans advertising tobacco online, and a storefront card with a
   // photo and a price is advertising. The storefront applies the same test
@@ -14501,6 +14606,7 @@
     $("removePhotoBtn").onclick = () => { currentImageData = null; currentThumbData = null; currentImageCredit = null; currentImageMeta = null; updatePhotoPreview(); };
     ["pf-price","pf-cost","pf-opcost","pf-markup","pf-competitor"].forEach(id => { $(id).oninput = updatePricingHelper; });
     $("pf-hasSubUnit").onchange = toggleSubUnitFields;
+    $("squarePhotosBtn").onclick = squareAllPhotos;
     $("dl-product").addEventListener("change", refreshDeliveryLot);
     ["pf-name","pf-category","pf-localName"].forEach(id => { const el = $(id); if(el) el.addEventListener("input", updateHideOnlineField); });
     $("dl-lot").addEventListener("change", updateDeliveryLotLabels);
@@ -14735,7 +14841,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v80";
+  const APP_VERSION = "v81";
 
   function init(){
     applyRememberedDesign();
