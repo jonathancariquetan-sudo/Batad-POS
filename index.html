@@ -14943,7 +14943,11 @@
       try{
         // Same tidy-up the bulk importer does. A photo taken at the counter
         // gets the colour cast and the framing sorted out on the way in.
-        const prepared = await preparePhotoFile(file, true, 900, 0.82);
+        // The cropper is given the photo exactly as it came off the phone —
+        // only made smaller. Running the automatic squaring first would hand
+        // the owner a picture that had already been cropped, and no amount of
+        // dragging can bring back what was cut before they saw it.
+        const prepared = await resizeImageFile(file, 1400, 0.88);
         openCropSheet(prepared, async (url) => {
           currentImageData = url;
           currentThumbData = await makeThumbFromDataUrl(url, 220, 0.62);
@@ -15211,7 +15215,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v92";
+  const APP_VERSION = "v93";
 
   function init(){
     applyRememberedDesign();
