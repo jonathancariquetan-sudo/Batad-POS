@@ -1117,6 +1117,8 @@
       <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Looks up each product by its barcode across the four open product databases, then by its full name and size. Nothing is saved until you have seen it. Expect a lot of &ldquo;no verified image found&rdquo; &mdash; most sari-sari lines are in no open database, and an honest blank beats a picture of the wrong thing.</p>
       <button type="button" class="btn btn-secondary" id="squarePhotosBtn" style="margin-top:8px;">🧹 Fit photos to the square</button>
       <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">New photos are saved square automatically. This does the same for the photos you already have: each one is placed whole on a white square &mdash; nothing cropped, nothing enlarged &mdash; so every card fills its box evenly.</p>
+      <button type="button" class="btn btn-secondary" id="cropPhotosBtn" style="margin-top:8px;">🔲 Crop photos to fill the square</button>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;">Same run, the other way: every photo is cropped from the middle until it fills its box, so there is no white edge anywhere. Best for photos you took yourself, where the edges are floor and shelf. A long sachet strip loses its ends this way &mdash; for those use the button above, or set the photo by hand with <b>Position / zoom</b> on the product.</p>
       <div id="squarePhotosResult" style="display:none;font-size:12px;line-height:1.6;margin-top:8px;"></div>
       <div id="finderStorageNote" style="display:none;"></div>
       <div id="finderResults" style="display:none;margin-top:12px;"></div>
@@ -1491,6 +1493,7 @@
             <button type="button" class="btn btn-secondary" id="choosePhotoBtn" style="flex:1;">🖼️ Gallery</button>
           </div>
           <button type="button" class="btn btn-secondary" id="findFreePhotoBtn">🔎 Find a free-to-use photo</button>
+          <button type="button" class="btn btn-secondary" id="adjustPhotoBtn" style="display:none;margin-bottom:8px;">✂️ Position / zoom</button>
           <button type="button" class="btn btn-danger" id="removePhotoBtn" style="display:none;">Remove photo</button>
         </div>
       </div>
@@ -1665,6 +1668,26 @@
     <div class="btn-row">
       <button class="btn btn-primary" id="addStickToCartBtn">Add to cart</button>
     </div>
+  </div>
+</div>
+
+<div class="sheet" id="cropSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header"><h2>Position the photo</h2><button class="sheet-close" data-close>✕</button></div>
+  <div class="sheet-body">
+    <p style="font-size:12.5px;color:var(--text-muted);line-height:1.5;margin:0 0 10px;">Drag the photo to move it and use the slider to zoom. Whatever is inside the square is what the till and the online store will show.</p>
+    <div id="cropViewport" style="position:relative;width:100%;aspect-ratio:1/1;overflow:hidden;background:#fff;border:1px solid var(--border);border-radius:12px;touch-action:none;">
+      <img id="cropImg" alt="" style="position:absolute;left:0;top:0;transform-origin:0 0;max-width:none;pointer-events:none;">
+    </div>
+    <div class="field" style="margin-top:12px;">
+      <label>Zoom</label>
+      <input type="range" id="cropZoom" min="100" max="300" value="100" style="width:100%;">
+    </div>
+    <div class="btn-row">
+      <button type="button" class="btn btn-secondary" id="cropFitBtn">Whole photo</button>
+      <button type="button" class="btn btn-secondary" id="cropFillBtn">Fill the square</button>
+    </div>
+    <button type="button" class="btn btn-primary" id="cropSaveBtn" style="margin-top:10px;">Use this photo</button>
   </div>
 </div>
 
@@ -3023,7 +3046,7 @@
   // bottle — is padded with white instead, because cropping that far would
   // cut the product itself. The product is never enlarged.
   const SQUARE_CROP_MIN = 0.8, SQUARE_CROP_MAX = 1.25;
-  function padToSquare(dataUrl, maxDim, quality){
+  function padToSquare(dataUrl, maxDim, quality, mode){
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
@@ -3041,7 +3064,11 @@
         out.width = out.height = dim;
         const ctx = out.getContext("2d");
         const ratio = w / h;
-        if(ratio >= SQUARE_CROP_MIN && ratio <= SQUARE_CROP_MAX){
+        // mode "fill" crops whatever it takes; "fit" keeps the whole picture;
+        // left unset, the shape decides (a near-square photo is cropped, a
+        // long one is kept whole).
+        const crop = mode === "fill" || (mode !== "fit" && ratio >= SQUARE_CROP_MIN && ratio <= SQUARE_CROP_MAX);
+        if(crop){
           // Close enough to square: take the last sliver off the long side so
           // the picture fills the box edge to edge.
           const side = Math.min(w, h);
@@ -6122,6 +6149,9 @@
     const img = $("photoPreviewImg");
     const ph = $("photoPlaceholder");
     const removeBtn = $("removePhotoBtn");
+    const adjustBtn = $("adjustPhotoBtn");
+    const hasSaved = !currentImageData && editingProductId && photoDisplaySrc(products.find(x => x.id === editingProductId));
+    if(adjustBtn) adjustBtn.style.display = (currentImageData || hasSaved) ? "block" : "none";
     if(currentImageData){
       img.src = currentImageData;
       img.style.display = "block";
@@ -9211,13 +9241,13 @@
       h: Math.min(h - 1, y1 + m) - Math.max(0, y0 - m) + 1
     };
   }
-  function squarePhotoFromImage(img){
+  function squarePhotoFromImage(img, mode){
     // Kept for the batch tool; it hands the picture to the same routine new
     // photos go through, so old and new end up looking the same.
     const c = document.createElement("canvas");
     c.width = img.width; c.height = img.height;
     c.getContext("2d").drawImage(img, 0, 0);
-    return padToSquare(c.toDataURL("image/jpeg", 0.92), SQUARE_PHOTO_DIM, 0.85);
+    return padToSquare(c.toDataURL("image/jpeg", 0.92), SQUARE_PHOTO_DIM, 0.85, mode);
   }
   function loadImageFromUrl(url){
     return new Promise((resolve, reject) => {
@@ -9229,7 +9259,12 @@
     });
   }
   let squaringPhotos = false, squareArmed = false, squareArmTimer = null;
-  async function squareAllPhotos(){
+  function resetSquareButtons(){
+    const a = $("squarePhotosBtn"), b = $("cropPhotosBtn");
+    if(a) a.textContent = "🧹 Fit photos to the square";
+    if(b) b.textContent = "🔲 Crop photos to fill the square";
+  }
+  async function squareAllPhotos(mode){
     if(squaringPhotos) return;
     const list = products.filter(p => hasStoredPhoto(p) && photoDisplaySrc(p));
     const box = $("squarePhotosResult");
@@ -9239,24 +9274,26 @@
     // a button that did nothing, which is how the payment bug hid for a week.
     if(!squareArmed){
       squareArmed = true;
-      $("squarePhotosBtn").textContent = "Tap again to fit " + list.length + " photo" + (list.length === 1 ? "" : "s");
+      const armBtn = $(mode === "fill" ? "cropPhotosBtn" : "squarePhotosBtn");
+      armBtn.textContent = "Tap again for " + list.length + " photo" + (list.length === 1 ? "" : "s");
       box.innerHTML = "Each photo is placed whole on a white square. The photo it replaces isn't kept, so this can't be undone — but nothing is deleted and no product loses its photo.";
       clearTimeout(squareArmTimer);
-      squareArmTimer = setTimeout(() => { squareArmed = false; $("squarePhotosBtn").textContent = "🧹 Fit photos to the square"; }, 8000);
+      squareArmTimer = setTimeout(() => { squareArmed = false; resetSquareButtons(); }, 8000);
       return;
     }
     clearTimeout(squareArmTimer);
     squareArmed = false;
-    $("squarePhotosBtn").textContent = "🧹 Fit photos to the square";
+    resetSquareButtons();
     squaringPhotos = true;
     $("squarePhotosBtn").disabled = true;
+    $("cropPhotosBtn").disabled = true;
     let done = 0, skipped = 0, failed = 0;
     for(let i = 0; i < list.length; i++){
       const p = list[i];
       box.innerHTML = "Working… " + (i + 1) + " of " + list.length + " · " + escapeHtml(p.name || "");
       try{
         const img = await loadImageFromUrl(photoDisplaySrc(p));
-        const url = await squarePhotoFromImage(img);
+        const url = await squarePhotoFromImage(img, mode);
         if(!url){ skipped++; continue; }
         const im = p.image;
         const data = (im && typeof im === "object")
@@ -9268,11 +9305,128 @@
     }
     squaringPhotos = false;
     $("squarePhotosBtn").disabled = false;
+    $("cropPhotosBtn").disabled = false;
     box.innerHTML = "<b>" + done + " fitted.</b>" + (skipped ? " " + skipped + " were already square." : "") +
       (failed ? " <span style=\"color:var(--danger);\">" + failed + " couldn't be read.</span>" : "") +
       " The Sell screen and the online store follow within a few seconds.";
     renderProductGrid();
     renderInventory();
+  }
+
+  // ---------- Positioning a photo by hand ----------
+  // Automatic framing gets a plain product shot right and a picture of a whole
+  // scene wrong, because nothing in the file says which part is the product.
+  // This hands that judgement back: the owner drags and zooms, and what sits
+  // inside the square is exactly what is saved — square by construction, so
+  // every card fills its box with no band and no surprise crop.
+  const cropState = { img: null, scale: 1, min: 1, x: 0, y: 0, view: 0, onDone: null };
+  function openCropSheet(dataUrl, onDone){
+    const img = new Image();
+    img.onload = () => {
+      cropState.img = img;
+      cropState.onDone = onDone;
+      openSheet("cropSheet");
+      // The viewport only has a size once the sheet is on screen.
+      setTimeout(() => {
+        const vp = $("cropViewport");
+        cropState.view = vp.clientWidth || 300;
+        const el = $("cropImg");
+        el.src = dataUrl;
+        el.style.width = img.width + "px";
+        el.style.height = img.height + "px";
+        cropFitWhole();
+      }, 30);
+    };
+    img.onerror = () => showToast("Couldn't read that photo");
+    img.src = dataUrl;
+  }
+  function cropApply(){
+    const el = $("cropImg");
+    el.style.transform = "translate(" + cropState.x + "px," + cropState.y + "px) scale(" + cropState.scale + ")";
+    const pct = Math.round(cropState.scale / cropState.min * 100);
+    const zoom = $("cropZoom");
+    if(zoom && String(pct) !== zoom.value) zoom.value = Math.max(100, Math.min(300, pct));
+  }
+  function cropCentre(){
+    const w = cropState.img.width * cropState.scale, h = cropState.img.height * cropState.scale;
+    cropState.x = (cropState.view - w) / 2;
+    cropState.y = (cropState.view - h) / 2;
+  }
+  function cropFitWhole(){
+    if(!cropState.img) return;
+    cropState.min = cropState.view / Math.max(cropState.img.width, cropState.img.height);
+    cropState.scale = cropState.min;
+    cropCentre(); cropApply();
+  }
+  function cropFillSquare(){
+    if(!cropState.img) return;
+    cropState.min = cropState.view / Math.max(cropState.img.width, cropState.img.height);
+    cropState.scale = cropState.view / Math.min(cropState.img.width, cropState.img.height);
+    cropCentre(); cropApply();
+  }
+  function cropSetZoom(pct){
+    if(!cropState.img) return;
+    const old = cropState.scale;
+    cropState.scale = cropState.min * (pct / 100);
+    // Zoom about the middle of the square, so the part being looked at stays put.
+    const k = cropState.scale / old;
+    cropState.x = cropState.view / 2 - (cropState.view / 2 - cropState.x) * k;
+    cropState.y = cropState.view / 2 - (cropState.view / 2 - cropState.y) * k;
+    cropApply();
+  }
+  function cropResult(dim, quality){
+    const c = document.createElement("canvas");
+    c.width = c.height = dim;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, dim, dim);
+    const k = dim / cropState.view;
+    ctx.drawImage(cropState.img,
+      cropState.x * k, cropState.y * k,
+      cropState.img.width * cropState.scale * k, cropState.img.height * cropState.scale * k);
+    return c.toDataURL("image/jpeg", quality || 0.85);
+  }
+  function bindCropUI(){
+    const vp = $("cropViewport");
+    if(!vp) return;
+    let dragging = false, lastX = 0, lastY = 0, pinch = 0, pinchScale = 1;
+    const pts = new Map();
+    vp.addEventListener("pointerdown", (e) => {
+      vp.setPointerCapture(e.pointerId);
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if(pts.size === 1){ dragging = true; lastX = e.clientX; lastY = e.clientY; }
+      else if(pts.size === 2){
+        const [a, b] = [...pts.values()];
+        pinch = Math.hypot(a.x - b.x, a.y - b.y);
+        pinchScale = cropState.scale;
+      }
+    });
+    vp.addEventListener("pointermove", (e) => {
+      if(!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if(pts.size === 2 && pinch > 0){
+        const [a, b] = [...pts.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        cropSetZoom(Math.max(100, Math.min(300, (pinchScale * d / pinch) / cropState.min * 100)));
+        return;
+      }
+      if(!dragging) return;
+      cropState.x += e.clientX - lastX;
+      cropState.y += e.clientY - lastY;
+      lastX = e.clientX; lastY = e.clientY;
+      cropApply();
+    });
+    const up = (e) => { pts.delete(e.pointerId); if(pts.size < 2) pinch = 0; if(pts.size === 0) dragging = false; };
+    vp.addEventListener("pointerup", up);
+    vp.addEventListener("pointercancel", up);
+    $("cropZoom").oninput = (e) => cropSetZoom(Number(e.target.value) || 100);
+    $("cropFitBtn").onclick = cropFitWhole;
+    $("cropFillBtn").onclick = cropFillSquare;
+    $("cropSaveBtn").onclick = () => {
+      const url = cropResult(640, 0.8);
+      closeSheet("cropSheet");
+      if(cropState.onDone) cropState.onDone(url);
+    };
   }
 
   // ---------- Counter-only products (tobacco and anything the owner picks) ----------
@@ -14789,11 +14943,14 @@
       try{
         // Same tidy-up the bulk importer does. A photo taken at the counter
         // gets the colour cast and the framing sorted out on the way in.
-        currentImageData = await preparePhotoFile(file, true, 640, 0.72);
-        currentThumbData = await makeThumbFromDataUrl(currentImageData, 220, 0.62);
-        currentImageCredit = null; // their own photo needs no attribution
-        currentImageMeta = null;
-        updatePhotoPreview();
+        const prepared = await preparePhotoFile(file, true, 900, 0.82);
+        openCropSheet(prepared, async (url) => {
+          currentImageData = url;
+          currentThumbData = await makeThumbFromDataUrl(url, 220, 0.62);
+          currentImageCredit = null; // their own photo needs no attribution
+          currentImageMeta = null;
+          updatePhotoPreview();
+        });
       }catch(err){
         console.error(err);
         showToast("Couldn't use that photo — try a different image");
@@ -14801,6 +14958,16 @@
     };
     $("pf-photo-input").onchange = handleProductPhoto;
     $("pf-photo-camera").onchange = handleProductPhoto;
+    bindCropUI();
+    $("adjustPhotoBtn").onclick = () => {
+      const src = currentImageData || (editingProductId ? photoDisplaySrc(products.find(x => x.id === editingProductId)) : "");
+      if(!src){ showToast("Add a photo first"); return; }
+      openCropSheet(src, async (url) => {
+        currentImageData = url;
+        currentThumbData = await makeThumbFromDataUrl(url, 220, 0.62);
+        updatePhotoPreview();
+      });
+    };
     $("takePhotoBtn").onclick = () => $("pf-photo-camera").click();
     $("findFreePhotoBtn").onclick = () => openFreePhotoPanel();
     $("freePhotoSearchBtn").onclick = () => searchFreePhotos();
@@ -14808,7 +14975,8 @@
     $("removePhotoBtn").onclick = () => { currentImageData = null; currentThumbData = null; currentImageCredit = null; currentImageMeta = null; updatePhotoPreview(); };
     ["pf-price","pf-cost","pf-opcost","pf-markup","pf-competitor"].forEach(id => { $(id).oninput = updatePricingHelper; });
     $("pf-hasSubUnit").onchange = toggleSubUnitFields;
-    $("squarePhotosBtn").onclick = squareAllPhotos;
+    $("squarePhotosBtn").onclick = () => squareAllPhotos("fit");
+    $("cropPhotosBtn").onclick = () => squareAllPhotos("fill");
     $("dl-product").addEventListener("change", refreshDeliveryLot);
     ["pf-name","pf-category","pf-localName"].forEach(id => { const el = $(id); if(el) el.addEventListener("input", updateHideOnlineField); });
     $("dl-lot").addEventListener("change", updateDeliveryLotLabels);
@@ -15043,7 +15211,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v90";
+  const APP_VERSION = "v92";
 
   function init(){
     applyRememberedDesign();
