@@ -1,4 +1,4 @@
-const CACHE_NAME = "grocery-pos-v87";
+const CACHE_NAME = "grocery-pos-v88";
 const APP_SHELL = [
   "./index.html",
   "./manifest.json",

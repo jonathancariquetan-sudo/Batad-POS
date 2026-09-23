@@ -2959,23 +2959,95 @@
   // portrait pack and a long sachet both land in a square that fills its box
   // on every screen with an even margin. This is done once, when the photo is
   // saved, so nothing has to be worked out while the till is being used.
+  // Strips the flat bars some pictures carry baked into their edges — the
+  // grey or beige pillars either side of a generated image, the white band a
+  // supplier's export leaves behind. A line counts as a bar only while it is
+  // one flat colour and matches the very edge, so a real photograph's sky or
+  // table top is never eaten. At most a fifth of a side can go.
+  function trimFlatBorders(canvas){
+    const w = canvas.width, h = canvas.height;
+    const ctx = canvas.getContext("2d");
+    let data;
+    try{ data = ctx.getImageData(0, 0, w, h).data; }catch(err){ return null; }
+    const lineStats = (fixed, horizontal) => {
+      let rs = 0, gs = 0, bs = 0, n = 0, mn = 255, mx = 0;
+      const len = horizontal ? w : h;
+      const step = Math.max(1, Math.round(len / 120));
+      for(let k = 0; k < len; k += step){
+        const x = horizontal ? k : fixed, y = horizontal ? fixed : k;
+        const i = (y * w + x) * 4;
+        rs += data[i]; gs += data[i+1]; bs += data[i+2]; n++;
+        const l = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+        if(l < mn) mn = l;
+        if(l > mx) mx = l;
+      }
+      return { r: rs/n, g: gs/n, b: bs/n, spread: mx - mn };
+    };
+    // A bar is a run of lines whose colour doesn't change as you move inward.
+    // Judging by that rather than by flatness matters: the bars on a generated
+    // picture usually carry the same top-to-bottom shading as the picture, so
+    // each line is not flat — but every line is the same as the one beside it,
+    // and the moment the real picture starts, that stops being true.
+    const near = (a, b) => Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b) < 30;
+    const scan = (from, to, horizontal) => {
+      const first = lineStats(from, horizontal);
+      const limit = Math.round(Math.abs(to - from) * 0.2);
+      let last = from, moved = 0;
+      const dir = to > from ? 1 : -1;
+      for(let i = from + dir; moved < limit; i += dir, moved++){
+        if(!near(lineStats(i, horizontal), first)) break;
+        last = i;
+      }
+      return last + dir;
+    };
+    const x0 = scan(0, w - 1, false), x1 = scan(w - 1, 0, false);
+    const y0 = scan(0, h - 1, true),  y1 = scan(h - 1, 0, true);
+    const nw = x1 - x0 + 1, nh = y1 - y0 + 1;
+    if(nw < w * 0.5 || nh < h * 0.5) return null;       // that isn't a border, that's the picture
+    if(nw === w && nh === h) return null;
+    const out = document.createElement("canvas");
+    out.width = nw; out.height = nh;
+    out.getContext("2d").drawImage(canvas, x0, y0, nw, nh, 0, 0, nw, nh);
+    return out;
+  }
+
+  // Every photo is saved square. Flat bars at the edges are trimmed off; then
+  // a picture that is already close to square is cropped the last little bit
+  // so it fills its box completely, and a long one — a sachet strip, a tall
+  // bottle — is padded with white instead, because cropping that far would
+  // cut the product itself. The product is never enlarged.
+  const SQUARE_CROP_MIN = 0.8, SQUARE_CROP_MAX = 1.25;
   function padToSquare(dataUrl, maxDim, quality){
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
-        const w = img.width, h = img.height;
-        if(!w || !h){ resolve(dataUrl); return; }
-        if(Math.abs(w - h) / Math.max(w, h) < 0.01){ resolve(dataUrl); return; }
+        const iw = img.width, ih = img.height;
+        if(!iw || !ih){ resolve(dataUrl); return; }
+        let src = document.createElement("canvas");
+        src.width = iw; src.height = ih;
+        src.getContext("2d").drawImage(img, 0, 0);
+        const trimmed = trimFlatBorders(src);
+        if(trimmed) src = trimmed;
+        const w = src.width, h = src.height;
+        if(!trimmed && Math.abs(w - h) / Math.max(w, h) < 0.01){ resolve(dataUrl); return; }
         const dim = Math.min(maxDim || Math.max(w, h), Math.max(w, h));
-        const c = document.createElement("canvas");
-        c.width = c.height = dim;
-        const ctx = c.getContext("2d");
-        ctx.fillStyle = "#FFFFFF";
-        ctx.fillRect(0, 0, dim, dim);
-        const s = dim / Math.max(w, h);
-        const dw = Math.max(1, Math.round(w * s)), dh = Math.max(1, Math.round(h * s));
-        ctx.drawImage(img, Math.round((dim - dw) / 2), Math.round((dim - dh) / 2), dw, dh);
-        resolve(c.toDataURL("image/jpeg", quality || 0.85));
+        const out = document.createElement("canvas");
+        out.width = out.height = dim;
+        const ctx = out.getContext("2d");
+        const ratio = w / h;
+        if(ratio >= SQUARE_CROP_MIN && ratio <= SQUARE_CROP_MAX){
+          // Close enough to square: take the last sliver off the long side so
+          // the picture fills the box edge to edge.
+          const side = Math.min(w, h);
+          ctx.drawImage(src, Math.round((w - side) / 2), Math.round((h - side) / 2), side, side, 0, 0, dim, dim);
+        } else {
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, dim, dim);
+          const sc = dim / Math.max(w, h);
+          const dw = Math.max(1, Math.round(w * sc)), dh = Math.max(1, Math.round(h * sc));
+          ctx.drawImage(src, Math.round((dim - dw) / 2), Math.round((dim - dh) / 2), dw, dh);
+        }
+        resolve(out.toDataURL("image/jpeg", quality || 0.85));
       };
       img.onerror = () => resolve(dataUrl);
       img.src = dataUrl;
@@ -9134,19 +9206,12 @@
     };
   }
   function squarePhotoFromImage(img){
-    const w = img.width, h = img.height;
-    if(!w || !h) return null;
-    if(Math.abs(w - h) / Math.max(w, h) < 0.02) return null;   // already square
-    const dim = Math.min(SQUARE_PHOTO_DIM, Math.max(w, h));
-    const out = document.createElement("canvas");
-    out.width = dim; out.height = dim;
-    const ctx = out.getContext("2d");
-    ctx.fillStyle = "#FFFFFF";
-    ctx.fillRect(0, 0, dim, dim);
-    const s = dim / Math.max(w, h);
-    const dw = Math.max(1, Math.round(w * s)), dh = Math.max(1, Math.round(h * s));
-    ctx.drawImage(img, Math.round((dim - dw) / 2), Math.round((dim - dh) / 2), dw, dh);
-    return out.toDataURL("image/jpeg", 0.85);
+    // Kept for the batch tool; it hands the picture to the same routine new
+    // photos go through, so old and new end up looking the same.
+    const c = document.createElement("canvas");
+    c.width = img.width; c.height = img.height;
+    c.getContext("2d").drawImage(img, 0, 0);
+    return padToSquare(c.toDataURL("image/jpeg", 0.92), SQUARE_PHOTO_DIM, 0.85);
   }
   function loadImageFromUrl(url){
     return new Promise((resolve, reject) => {
@@ -9185,7 +9250,7 @@
       box.innerHTML = "Working… " + (i + 1) + " of " + list.length + " · " + escapeHtml(p.name || "");
       try{
         const img = await loadImageFromUrl(photoDisplaySrc(p));
-        const url = squarePhotoFromImage(img);
+        const url = await squarePhotoFromImage(img);
         if(!url){ skipped++; continue; }
         const im = p.image;
         const data = (im && typeof im === "object")
@@ -14972,7 +15037,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v87";
+  const APP_VERSION = "v88";
 
   function init(){
     applyRememberedDesign();
