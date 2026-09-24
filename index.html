@@ -693,6 +693,7 @@
     </div>
     <span class="date" id="headerDate"></span>
   </div>
+  <div id="tzWarning" style="display:none;background:var(--danger-tint,#FDECEC);color:var(--danger);border-top:1px solid var(--danger);padding:7px 14px;font-size:12px;line-height:1.45;font-weight:700;"></div>
   <div class="subrow">
     <span class="sync-status" id="syncStatus">Synced with cloud</span>
     <div style="display:flex;align-items:center;gap:14px;">
@@ -2448,6 +2449,11 @@
         <option value="eight_percent">Non-VAT — 8% flat rate in lieu of Percentage Tax + income tax</option>
         <option value="vat">VAT-registered — 12% VAT</option>
       </select>
+    </div>
+    <div class="field">
+      <label>Time zone (where the shop is)</label>
+      <select id="bf-tz"></select>
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:6px 0 0;" id="bf-tzNote"></p>
     </div>
     <div class="field">
       <label>ATP / CAS Acknowledgement Certificate no. (optional, once BIR issues it)</label>
@@ -6562,6 +6568,7 @@
 
     listenerUnsubs.push(db.collection("settings").doc("business").onSnapshot((doc) => {
       bizSettings = doc.exists ? Object.assign({ name:"", address:"", tin:"", taxType:"non_vat", accreditation:"" }, doc.data()) : { name:"", address:"", tin:"", taxType:"non_vat", accreditation:"" };
+      renderTzWarning();
       renderBizSummary();
       renderMarginReport();
     }, (err) => { console.error(err); }));
@@ -7460,8 +7467,16 @@
       $("checkoutBtn").disabled = cart.length === 0;
       return;
     }
+    const stamps = localStamps(deviceTz());
     const sale = {
       timestamp: new Date().toISOString(),
+      // The exact moment as the server saw it, plus the local clock reading:
+      // the first settles which sale came first, the second is what the
+      // reports and the Z-reading are built from.
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      tz: stamps.tz,
+      localDay: stamps.localDay,
+      localHour: stamps.localHour,
       items: saleItems,
       subtotal: subtotal,
       discount: discountRecord,
@@ -10375,6 +10390,7 @@
   async function saveReturn(){
     if(!returningSale) return;
     const today = todayISO();
+    const returnStamps = localStamps(deviceTz());
     if(dayIsClosed(today)){ showToast("Today is closed — a return has to wait for tomorrow"); return; }
     if(!navigator.onLine){ showToast("Offline — wait for a signal before recording a return"); return; }
     const d = returnDraft();
@@ -10408,6 +10424,10 @@
       batch.set(db.collection("sales").doc(), {
         type: "return",
         timestamp: new Date().toISOString(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        tz: returnStamps.tz,
+        localDay: returnStamps.localDay,
+        localHour: returnStamps.localHour,
         businessDate: today,
         creditNumber,
         // The rules require an invoiceNumber, and a credit document must not
@@ -10503,13 +10523,9 @@
   function closingFor(date){ return dayClosings.find(d => d.id === date) || null; }
   function dayIsClosed(date){ return !!closingFor(date); }
 
-  function businessDateOf(sale){
-    if(sale.businessDate) return sale.businessDate;
-    // Sales recorded before the business date existed carry only a UTC
-    // timestamp, so it is converted to the local day here rather than sliced,
-    // which would put an evening's trade on the wrong date.
-    return sale.timestamp ? dayKeyOf(sale.timestamp) : "";
-  }
+  // One way in for "which day is this sale on": the day the shop's clock
+  // showed. Sales from before zones were kept are read in the shop's zone.
+  function businessDateOf(sale){ return saleDayOf(sale || {}); }
 
   function salesForDay(date){
     return sales.filter(s => businessDateOf(s) === date);
@@ -10875,7 +10891,10 @@
     if(t.list.length === 0) out.push("(no sales recorded on this date)");
     t.list.forEach(s => {
       out.push("================================");
-      out.push((isReturnDoc(s) ? "CREDIT " : "INVOICE ") + docNumberOf(s) + "   " + new Date(s.timestamp).toLocaleString("en-PH"));
+      // Printed in the zone the sale was rung up in, and the zone is named, so a
+      // journal read anywhere still shows the shop's own clock.
+      out.push((isReturnDoc(s) ? "CREDIT " : "INVOICE ") + docNumberOf(s) + "   " +
+        saleDayOf(s) + " " + saleTimeText(s) + " (" + (s.tz || storeTz() || FALLBACK_TZ) + ")");
       if(isReturnDoc(s)) out.push("Against invoice " + formatInvoiceNumber(s.refInvoice || 0) + " of " + (s.refDate || "?") + " — " + (RETURN_REASON_LABELS[s.reason] || "Other") + (s.restocked ? ", returned to stock" : ", not returned to stock"));
       out.push("Cashier: " + (s.cashierName || "-") + "   Source: " + (s.source === "online" ? "online order" : "counter") + "   Paid: " + (s.source === "online" ? "online" : (s.payment === "gcash" ? "GCash" : "cash")));
       (s.items || []).forEach(it => {
@@ -11497,10 +11516,18 @@
         return;
       }
       const invoiceNumber = await getNextInvoiceNumber();
+      // An online sale is stamped in the SHOP'S zone, not the phone's and not
+      // the customer's: a buyer whose phone is set to another country must not
+      // move the shop's takings into a different hour or a different day.
+      const orderStamps = localStamps(storeTz());
       const batch = db.batch();
       batch.set(db.collection("sales").doc(), {
         timestamp: new Date().toISOString(),
-        businessDate: todayISO(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        tz: orderStamps.tz,
+        localDay: orderStamps.localDay,
+        localHour: orderStamps.localHour,
+        businessDate: orderStamps.localDay,
         items: o.items,
         total: lineTotal,
         source: "online",
@@ -11665,7 +11692,7 @@
       card.className = "sale-card";
       const sourceTag = (s.source === "online" ? " · online" : "") + (s.cashierName ? " · " + escapeHtml(s.cashierName) : "");
       card.innerHTML = `
-        <div class="top"><span>${d.toLocaleDateString("en-PH",{month:"short",day:"numeric"})} · ${d.toLocaleTimeString("en-PH",{hour:"numeric",minute:"2-digit"})}${sourceTag}</span><span>${itemCount} item${itemCount!==1?"s":""}</span></div>
+        <div class="top"><span>${d.toLocaleDateString("en-PH",{month:"short",day:"numeric"})} · ${escapeHtml(saleTimeText(s))}${sourceTag}</span><span>${itemCount} item${itemCount!==1?"s":""}</span></div>
         <div class="amt" style="${isReturnDoc(s) ? "color:var(--danger);" : ""}">${isReturnDoc(s) ? "−" : ""}${peso(s.total)}</div>
       `;
       card.onclick = () => openSaleDetail(s.id);
@@ -11774,12 +11801,30 @@
     `;
   }
 
+  // A short list, plus whatever this device is set to, so the shop's zone can
+  // be picked without typing an IANA name from memory.
+  const TZ_CHOICES = ["Asia/Manila", "Asia/Singapore", "Asia/Hong_Kong", "Asia/Dubai", "Asia/Riyadh", "Asia/Tokyo", "Australia/Sydney", "Europe/London", "America/Los_Angeles", "America/New_York"];
+  function fillTzSelect(){
+    const sel = $("bf-tz");
+    if(!sel) return;
+    const dev = deviceTz();
+    const list = TZ_CHOICES.slice();
+    if(list.indexOf(dev) < 0) list.unshift(dev);
+    const chosen = (bizSettings && bizSettings.timeZone) || dev;
+    if(list.indexOf(chosen) < 0) list.unshift(chosen);
+    sel.innerHTML = list.map(z => `<option value="${escapeHtml(z)}">${escapeHtml(z)}${z === dev ? " (this device)" : ""}</option>`).join("");
+    sel.value = chosen;
+    const note = $("bf-tzNote");
+    if(note) note.textContent = "Every sale is stamped with the clock on the device that rang it up. This setting is the shop's own zone: it stamps online orders and reads back sales recorded before zones were kept.";
+  }
+
   function openBizSettingsSheet(){
     $("bf-name").value = bizSettings.name || "";
     $("bf-address").value = bizSettings.address || "";
     $("bf-tin").value = bizSettings.tin || "";
     $("bf-taxtype").value = bizSettings.taxType || "non_vat";
     $("bf-accreditation").value = bizSettings.accreditation || "";
+    fillTzSelect();
     openSheet("bizSettingsSheet");
   }
 
@@ -11789,7 +11834,8 @@
       address: $("bf-address").value.trim(),
       tin: $("bf-tin").value.trim(),
       taxType: $("bf-taxtype").value,
-      accreditation: $("bf-accreditation").value.trim()
+      accreditation: $("bf-accreditation").value.trim(),
+      timeZone: $("bf-tz").value || deviceTz()
     };
     try{
       await db.collection("settings").doc("business").set(data);
@@ -12308,11 +12354,72 @@
   // sealed a day that was still trading. Every date the shop records — the
   // business day, a delivery, an expiry, a credit — is a local calendar date
   // and is built from local parts.
+  // ---------- Time zones ----------
+  // A sale belongs to the clock on the wall where it was rung up. The device
+  // supplies that zone, and it is written onto the sale itself, so the record
+  // still reads correctly when it is looked at from anywhere else — and so the
+  // same app can run a shop in another country without a setting to remember.
+  // Sales made before this existed carry no zone; they are read as the shop's.
+  const FALLBACK_TZ = "Asia/Manila";
+  function deviceTz(){
+    try{ return Intl.DateTimeFormat().resolvedOptions().timeZone || FALLBACK_TZ; }
+    catch(err){ return FALLBACK_TZ; }
+  }
+  // The shop's own zone: what online orders and old records are read in. It is
+  // set in Business & BIR info; until it is, the device's zone stands in.
+  function storeTz(){
+    return (bizSettings && bizSettings.timeZone) || deviceTz();
+  }
+  function dayInTz(date, tz){
+    try{ return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(date); }
+    catch(err){ return dayKeyOf(date); }
+  }
+  function hourInTz(date, tz){
+    try{
+      return Number(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(date));
+    }catch(err){ return new Date(date).getHours(); }
+  }
+  // What to stamp on a record being written now, in the zone given.
+  function localStamps(tz){
+    const now = new Date();
+    return { tz: tz, localDay: dayInTz(now, tz), localHour: hourInTz(now, tz) };
+  }
+  // What to read off a record already written. Prefers what the record carries.
+  function saleDayOf(s){
+    if(s && s.localDay) return s.localDay;
+    if(s && s.businessDate) return s.businessDate;
+    return s && s.timestamp ? dayInTz(new Date(s.timestamp), s.tz || storeTz() || FALLBACK_TZ) : "";
+  }
+  function saleHourOf(s){
+    if(s && typeof s.localHour === "number" && isFinite(s.localHour)) return s.localHour;
+    if(!s || !s.timestamp) return 0;
+    return hourInTz(new Date(s.timestamp), s.tz || storeTz() || FALLBACK_TZ);
+  }
+  // The clock reading to print beside a sale: the one where it was rung up.
+  function saleTimeText(s){
+    if(!s || !s.timestamp) return "";
+    try{
+      return new Intl.DateTimeFormat("en-PH", { timeZone: s.tz || storeTz() || FALLBACK_TZ, hour: "numeric", minute: "2-digit" }).format(new Date(s.timestamp));
+    }catch(err){ return new Date(s.timestamp).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" }); }
+  }
+
   function todayISO(){
-    const d = new Date();
-    return d.getFullYear() + "-" +
-      String(d.getMonth() + 1).padStart(2, "0") + "-" +
-      String(d.getDate()).padStart(2, "0");
+    return dayInTz(new Date(), deviceTz());
+  }
+
+  // If this phone's zone isn't the shop's, every sale it rings up will carry a
+  // different clock — which is exactly how a day's takings end up filed under
+  // the wrong hour. Say so on the screen rather than silently correcting it,
+  // because the phone may be right and the setting stale.
+  function renderTzWarning(){
+    const el = $("tzWarning");
+    if(!el) return;
+    const shop = (bizSettings && bizSettings.timeZone) || "";
+    const dev = deviceTz();
+    if(!shop || shop === dev){ el.style.display = "none"; return; }
+    el.style.display = "block";
+    el.textContent = "This device is set to " + dev + ", but the shop is set to " + shop +
+      ". Turn on automatic time zone on this phone, or change the shop's zone in Business & BIR info.";
   }
   function daysAgo(n){ const d = new Date(); d.setDate(d.getDate() - n); return d; }
   function addDays(dateStr, n){
@@ -13877,8 +13984,9 @@
       if(isReturnDoc(s) || !s.timestamp) return;
       const t = new Date(s.timestamp);
       if(t >= since28){
-        hourCount[t.getHours()]++;
-        hourValue[t.getHours()] += Number(s.total) || 0;
+        const hr = saleHourOf(s);
+        hourCount[hr]++;
+        hourValue[hr] += Number(s.total) || 0;
         total28 += Number(s.total) || 0;
         visits28++;
       }
@@ -15215,7 +15323,7 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v93";
+  const APP_VERSION = "v94";
 
   function init(){
     applyRememberedDesign();
