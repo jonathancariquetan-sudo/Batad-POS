@@ -6595,6 +6595,29 @@
     else viewDirty[view] = true;
   }
 
+  // v96 perf: draw a long list a screenful at a time. Building all 549 product
+  // rows at once means parsing 549 photos' worth of embedded image data before
+  // the tab can show anything. The first rows now appear immediately and the
+  // rest follow in small batches a few milliseconds apart. A newer draw of the
+  // same list cancels one still in progress, so typing in the search box never
+  // piles up work.
+  const chunkTokens = {};
+  function appendInChunks(key, wrap, items, build){
+    const token = {};
+    chunkTokens[key] = token;
+    const FIRST = 30, STEP = 50;
+    let i = 0;
+    const step = () => {
+      if(chunkTokens[key] !== token) return;
+      const end = Math.min(items.length, i === 0 ? FIRST : i + STEP);
+      const frag = document.createDocumentFragment();
+      for(; i < end; i++) frag.appendChild(build(items[i]));
+      wrap.appendChild(frag);
+      if(i < items.length) setTimeout(step, 12);
+    };
+    step();
+  }
+
   // Sales history + the target banner are shared by the owner and managers
   // (both get the Sales dashboard) — see firestore.rules for the read grant.
   let managerListenersAttached = false;
@@ -6989,7 +7012,7 @@
     grid.style.display = "grid";
     grid.innerHTML = "";
 
-    list.forEach(p => {
+    appendInChunks("grid", grid, list, p => {
       const inCartQty = cart.filter(c => c.productId === p.id).reduce((s,c)=>s+c.qty,0);
       const card = document.createElement("div");
       card.className = "product-card" + (p.stock <= 0 ? " out" : "");
@@ -7010,7 +7033,7 @@
       }
       const bulkBtn = card.querySelector("[data-bulk-btn]");
       if(bulkBtn) bulkBtn.onclick = (e) => { e.stopPropagation(); openBulkSheet(p.id); };
-      grid.appendChild(card);
+      return card;
     });
 
     if(list.length === 0){
@@ -7619,7 +7642,7 @@
     wrap.style.display = "block";
     wrap.innerHTML = "";
 
-    list.forEach(p => {
+    appendInChunks("inv", wrap, list, p => {
       const low = p.stock <= (p.threshold || 5);
       const m = productMargin(p); // null for staff/manager and for uncosted items
       const row = document.createElement("div");
@@ -7635,7 +7658,7 @@
         <div class="stock-pill${low ? " low" : ""}">${formatStock(p.stock)} in stock</div>
       `;
       row.onclick = () => openStockAdjust(p.id);
-      wrap.appendChild(row);
+      return row;
     });
 
     if(list.length === 0){
@@ -11932,8 +11955,27 @@
     return { start, end };
   }
 
+  // A quarter already fetched is still right if nothing has been rung up, and
+  // no stock changed, since — the live `sales` / `stockLogs` lists are replaced
+  // the moment either happens — and it is not stale by the clock.
+  const reportFetched = { sales: null, stock: null };
+  function reportFetchFresh(kind){
+    const f = reportFetched[kind];
+    return !!f && f.key === (reportQuarter.year + "-" + reportQuarter.q) &&
+      f.salesRef === sales && f.logsRef === stockLogs &&
+      Date.now() - f.at < 5 * 60 * 1000;
+  }
+  // Stamped with the lists as they were when the fetch STARTED, so a sale that
+  // lands while the download is in flight makes the result count as stale.
+  function markReportFetched(kind, key, salesRef, logsRef){
+    reportFetched[kind] = { key, salesRef, logsRef, at: Date.now() };
+  }
+
   async function loadReportStockLogs(){
+    if(reportFetchFresh("stock")) return;
     const { start, end } = quarterRange(reportQuarter.year, reportQuarter.q);
+    const fetchKey = reportQuarter.year + "-" + reportQuarter.q;
+    const salesRef0 = sales, logsRef0 = stockLogs;
     try{
       const snap = await db.collection("stockLogs")
         .where("timestamp", ">=", start.toISOString())
@@ -11941,9 +11983,11 @@
         .orderBy("timestamp", "asc")
         .get();
       reportStockCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      markReportFetched("stock", fetchKey, salesRef0, logsRef0);
     }catch(err){
       console.error(err);
       reportStockCache = [];
+      reportFetched.stock = null;
     }
   }
 
@@ -12003,7 +12047,10 @@
   }
 
   async function loadReportSales(){
+    if(reportFetchFresh("sales")) return;
     const { start, end } = quarterRange(reportQuarter.year, reportQuarter.q);
+    const fetchKey = reportQuarter.year + "-" + reportQuarter.q;
+    const salesRef0 = sales, logsRef0 = stockLogs;
     try{
       const snap = await db.collection("sales")
         .where("timestamp", ">=", start.toISOString())
@@ -12011,9 +12058,11 @@
         .orderBy("timestamp", "asc")
         .get();
       reportSalesCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      markReportFetched("sales", fetchKey, salesRef0, logsRef0);
     }catch(err){
       console.error(err);
       reportSalesCache = [];
+      reportFetched.sales = null;
       showToast("Couldn't load sales for that quarter");
     }
   }
@@ -12073,6 +12122,12 @@
     loadUnknownBarcodes();
     $("reportQLabel").textContent = "Q" + reportQuarter.q + " " + reportQuarter.year;
     $("taxReportCard").textContent = "Loading…";
+    // v96 perf: the two quarter fetches used to run one after the other, and
+    // both re-downloaded the quarter on every visit. They now start together,
+    // and a quarter already fetched is reused until a sale or stock change
+    // arrives (or five minutes pass) — see reportFetchFresh().
+    $("lossReportSummary").textContent = "Loading…";
+    const stockFetch = loadReportStockLogs();
     await loadReportSales();
     // Net of returns — a refunded sale is not revenue, and percentage tax is
     // due on receipts actually kept.
@@ -12087,8 +12142,7 @@
     if(tax.note) html += `<p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin:8px 0 0;">${escapeHtml(tax.note)}</p>`;
     $("taxReportCard").innerHTML = html;
     renderScpwdReport();
-    $("lossReportSummary").textContent = "Loading…";
-    await loadReportStockLogs();
+    await stockFetch;
     renderLossReport();
   }
 
@@ -12462,31 +12516,85 @@
   // Everything is counted in PACKS, the same unit stock is held in, so a tingi
   // sale of 3 sticks from a 20-stick pack counts as 0.15 packs. Velocity and
   // stock therefore share a unit and "days of cover" means what it says.
-  function packsSoldSince(productId, fromDate){
-    let total = 0;
+  // v96 perf: a per-product index of sales, purchases and stock logs.
+  //
+  // Every demand figure below is asked PER PRODUCT. The old way answered each
+  // one by walking the entire sales history (every sale, every line) — and the
+  // advisor, the buying list and the reports ask for all 549 products, several
+  // figures each. That is tens of millions of steps every time a tab opened,
+  // which is the multi-second wait. Now the history is grouped by product ONCE
+  // and each question reads only that product's own lines. The arithmetic is
+  // unchanged; only where it looks is.
+  //
+  // The index (and the per-product results built on it) is rebuilt when the
+  // underlying lists are replaced — i.e. whenever a sale, delivery or stock
+  // change arrives — and at least every five minutes, since "last 7 days" moves.
+  let perfIx = null;
+  function perfIndex(){
+    const now = Date.now();
+    if(perfIx && perfIx.sales === sales && perfIx.purchases === purchases &&
+       perfIx.stockLogs === stockLogs && perfIx.products === products &&
+       now - perfIx.builtAt < 5 * 60 * 1000){
+      return perfIx;
+    }
+    const salesBy = new Map(), purBy = new Map(), logBy = new Map();
+    const push = (m, k, v) => { const a = m.get(k); if(a) a.push(v); else m.set(k, [v]); };
     for(const s of sales){
       if(!s.timestamp) continue;
-      if(new Date(s.timestamp) < fromDate) continue;
+      const t = new Date(s.timestamp).getTime();
+      const ret = isReturnDoc(s);
       const sign = saleSign(s);
       for(const it of (s.items || [])){
-        if(it.productId !== productId) continue;
-        const perPack = itemDivisor(it);
-        total += sign * (Number(it.qty) || 0) / perPack;
+        if(!it.productId) continue;
+        push(salesBy, it.productId, {
+          t, ts: s.timestamp, ret, sign,
+          qty: Number(it.qty) || 0,
+          price: Number(it.price) || 0,
+          div: itemDivisor(it)
+        });
       }
+    }
+    for(const pur of purchases){
+      for(const it of (pur.items || [])){
+        if(!it.productId) continue;
+        push(purBy, it.productId, { when: pur.date + "T12:00:00", qty: Number(it.qty) || 0 });
+      }
+    }
+    for(const l of stockLogs){
+      if(!l.productId) continue;
+      push(logBy, l.productId, { when: l.timestamp, delta: Number(l.delta) || 0 });
+    }
+    perfIx = {
+      sales, purchases, stockLogs, products, builtAt: now,
+      salesBy, purBy, logBy,
+      moves: new Map(),   // productId -> stock movements by day
+      vel: new Map()      // productId -> velocityDetail result
+    };
+    return perfIx;
+  }
+
+  function packsSoldSince(productId, fromDate){
+    const list = perfIndex().salesBy.get(productId);
+    if(!list) return 0;
+    const from = +fromDate;
+    let total = 0;
+    for(const e of list){
+      if(e.t < from) continue;
+      total += e.sign * e.qty / e.div;
     }
     return Math.max(0, total);
   }
 
   function lastSoldDaysAgo(productId){
+    const list = perfIndex().salesBy.get(productId);
+    if(!list) return null;
     let newest = null;
-    for(const s of sales){
-      if(!s.timestamp) continue;
-      if(!(s.items || []).some(it => it.productId === productId)) continue;
-      const t = new Date(s.timestamp);
-      if(!newest || t > newest) newest = t;
+    for(const e of list){
+      if(!(e.t === e.t)) continue;               // skip unreadable dates
+      if(newest === null || e.t > newest) newest = e.t;
     }
-    if(!newest) return null;
-    return Math.floor((Date.now() - newest.getTime()) / 86400000);
+    if(newest === null) return null;
+    return Math.floor((Date.now() - newest) / 86400000);
   }
 
   // What a pack ACTUALLY earns, from the mix it really sold in.
@@ -12497,18 +12605,14 @@
   // would push the very lines that pay best to the bottom of the order list.
   // So revenue and packs are both taken from real sales and divided.
   function realisedRevenuePerPack(p){
-    const from = daysAgo(28);
+    const from = +daysAgo(28);
     let rev = 0, packs = 0;
-    for(const s of sales){
-      if(!s.timestamp || new Date(s.timestamp) < from) continue;
-      const sign = saleSign(s);
-      for(const it of (s.items || [])){
-        if(it.productId !== p.id) continue;
-        const perPack = itemDivisor(it);
-        const qty = sign * (Number(it.qty) || 0);
-        rev += (Number(it.price) || 0) * qty;
-        packs += qty / perPack;
-      }
+    const list = perfIndex().salesBy.get(p.id) || [];
+    for(const e of list){
+      if(e.t < from) continue;
+      const qty = e.sign * e.qty;
+      rev += e.price * qty;
+      packs += qty / e.div;
     }
     if(packs <= 0) return Number(p.price) || 0;
     return rev / packs;
@@ -12539,32 +12643,24 @@
   // Every known change to one product's stock, gathered per day.
   // Sales take stock away; deliveries and corrections move it either way.
   function stockMovementsByDay(productId){
+    const ix = perfIndex();
+    const cached = ix.moves.get(productId);
+    if(cached) return cached;
     const byDay = {};
     const add = (when, delta) => {
       if(!when) return;
       const k = dayKeyOf(when);
       byDay[k] = (byDay[k] || 0) + delta;
     };
-    for(const s of sales){
+    for(const e of (ix.salesBy.get(productId) || [])){
       // A return that went back on the shelf is recorded as a stock log entry
       // below; counting it here as well would put the goods back twice.
-      if(isReturnDoc(s)) continue;
-      for(const it of (s.items || [])){
-        if(it.productId !== productId) continue;
-        const perPack = itemDivisor(it);
-        add(s.timestamp, -((Number(it.qty) || 0) / perPack));
-      }
+      if(e.ret) continue;
+      add(e.ts, -(e.qty / e.div));
     }
-    for(const pur of purchases){
-      for(const it of (pur.items || [])){
-        if(it.productId !== productId) continue;
-        add(pur.date + "T12:00:00", Number(it.qty) || 0);
-      }
-    }
-    for(const l of stockLogs){
-      if(l.productId !== productId) continue;
-      add(l.timestamp, Number(l.delta) || 0);
-    }
+    for(const e of (ix.purBy.get(productId) || [])) add(e.when, e.qty);
+    for(const e of (ix.logBy.get(productId) || [])) add(e.when, e.delta);
+    ix.moves.set(productId, byDay);
     return byDay;
   }
 
@@ -12594,14 +12690,12 @@
   // sales by 28 days makes a brisk new line look like a dud.
   function daysSinceFirstSale(productId){
     let oldest = null;
-    for(const s of sales){
-      if(!s.timestamp) continue;
-      if(!(s.items || []).some(it => it.productId === productId)) continue;
-      const t = new Date(s.timestamp);
-      if(!oldest || t < oldest) oldest = t;
+    for(const e of (perfIndex().salesBy.get(productId) || [])){
+      if(!(e.t === e.t)) continue;               // skip unreadable dates
+      if(oldest === null || e.t < oldest) oldest = e.t;
     }
-    if(!oldest) return null;
-    return Math.floor((Date.now() - oldest.getTime()) / 86400000) + 1;
+    if(oldest === null) return null;
+    return Math.floor((Date.now() - oldest) / 86400000) + 1;
   }
 
   // The rate over one window, measured only across the days it could sell.
@@ -12624,6 +12718,15 @@
   // little below two — while the four-week rate carries the rest. Both windows
   // are whole numbers of weeks, so Sunday trade doesn't skew either one.
   function velocityDetail(productId){
+    // Remembered per product until the sales/stock data next changes: the
+    // advisor, the buying list and the reorder maths all ask for the same
+    // answer, and none of them should have to work it out again.
+    const memo = perfIndex().vel;
+    let hit = memo.get(productId);
+    if(!hit){ hit = velocityDetailCalc(productId); memo.set(productId, hit); }
+    return hit;
+  }
+  function velocityDetailCalc(productId){
     const r7 = rateOver(productId, 7);
     const r28 = rateOver(productId, 28);
     if(r28.packs <= 0 && r7.packs <= 0) return { v: 0, r7, r28, w7: 1, trend: "none" };
@@ -15354,7 +15457,12 @@
   // products/sales/orders change if that tab isn't the one on screen; they
   // redraw once when you switch to them instead. The orders listener, which
   // had no limit at all, is now capped at 500. Nothing else changed.
-  const APP_VERSION = "v95";
+  // v96 — perf: demand/velocity figures (advisor, buying list, reorder maths)
+  // now read a per-product index of sales instead of rescanning the whole
+  // history for each of the products; the Inventory and Sell lists draw their
+  // first rows at once and the rest in batches; Reports reuses the quarter it
+  // already downloaded until a sale or stock change arrives. Same numbers.
+  const APP_VERSION = "v96";
 
   function init(){
     applyRememberedDesign();
