@@ -6701,14 +6701,16 @@
 
     // Cost figures live apart from the public product list, so margins are
     // only ever computed on the owner's device.
+    // v96 perf: these used to redraw the whole Buying tab on every change even
+    // when another tab was open — four full redraws just from the app starting.
     ownerListenerUnsubs.push(db.collection("suppliers").onSnapshot((snap) => {
       suppliers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderBuyingView();
+      renderIfActive("buying", renderBuyingView);
     }, (err) => { console.error(err); }));
 
     ownerListenerUnsubs.push(db.collection("purchases").orderBy("date", "desc").limit(400).onSnapshot((snap) => {
       purchases = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderBuyingView();
+      renderIfActive("buying", renderBuyingView);
     }, (err) => { console.error(err); }));
 
     ownerListenerUnsubs.push(db.collection("settings").doc("openingPosition").onSnapshot((doc) => {
@@ -6718,7 +6720,7 @@
 
     ownerListenerUnsubs.push(db.collection("supplierPayments").orderBy("date", "desc").limit(400).onSnapshot((snap) => {
       supplierPayments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderBuyingView();
+      renderIfActive("buying", renderBuyingView);
     }, (err) => { console.error(err); }));
 
     // Running costs are owner-only for the same reason margins are: what the
@@ -6746,8 +6748,8 @@
       renderPnl();
       renderBreakEven();
       renderStockValue();
-      renderInventory();
-      renderBuyingView();
+      renderIfActive("inventory", renderInventory);
+      renderIfActive("buying", renderBuyingView);
     }, (err) => { console.error(err); }));
   }
 
@@ -11976,6 +11978,17 @@
     const { start, end } = quarterRange(reportQuarter.year, reportQuarter.q);
     const fetchKey = reportQuarter.year + "-" + reportQuarter.q;
     const salesRef0 = sales, logsRef0 = stockLogs;
+    // Same shortcut as the sales: the live stock-log list holds the newest 100
+    // entries, which is the whole quarter when it hasn't filled up yet.
+    const startISO = start.toISOString(), endISO = end.toISOString();
+    const oldestLog = stockLogs.length ? stockLogs[stockLogs.length - 1].timestamp : null;
+    if(stockLogs.length > 0 && (stockLogs.length < 100 || (oldestLog && oldestLog <= startISO))){
+      reportStockCache = stockLogs
+        .filter(l => l.timestamp && l.timestamp >= startISO && l.timestamp <= endISO)
+        .sort((a, b) => a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0);
+      markReportFetched("stock", fetchKey, salesRef0, logsRef0);
+      return;
+    }
     try{
       const snap = await db.collection("stockLogs")
         .where("timestamp", ">=", start.toISOString())
@@ -12051,6 +12064,18 @@
     const { start, end } = quarterRange(reportQuarter.year, reportQuarter.q);
     const fetchKey = reportQuarter.year + "-" + reportQuarter.q;
     const salesRef0 = sales, logsRef0 = stockLogs;
+    // v96 perf: the live sales list already holds the newest 2,000 sales. If it
+    // reaches back to the start of the quarter (or holds the shop's entire
+    // history), the quarter is already on the phone — no download needed.
+    const startISO = start.toISOString(), endISO = end.toISOString();
+    const oldestLoaded = sales.length ? sales[sales.length - 1].timestamp : null;
+    if(sales.length > 0 && (sales.length < 2000 || (oldestLoaded && oldestLoaded <= startISO))){
+      reportSalesCache = sales
+        .filter(s => s.timestamp && s.timestamp >= startISO && s.timestamp <= endISO)
+        .sort((a, b) => a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0);
+      markReportFetched("sales", fetchKey, salesRef0, logsRef0);
+      return;
+    }
     try{
       const snap = await db.collection("sales")
         .where("timestamp", ">=", start.toISOString())
@@ -12752,20 +12777,17 @@
   // honest measure of that swing, and the cushion grows with it.
   function demandVariability(productId){
     const weeks = [];
+    // v96 perf: read this product's own sales from the index, not the whole
+    // history four times over (this was the single biggest cost on Buying and
+    // Reports — it ran for every product).
+    const list = perfIndex().salesBy.get(productId) || [];
     for(let w = 0; w < 4; w++){
-      const from = daysAgo((w + 1) * 7);
-      const to = daysAgo(w * 7);
+      const from = +daysAgo((w + 1) * 7);
+      const to = +daysAgo(w * 7);
       let total = 0;
-      for(const s of sales){
-        if(!s.timestamp) continue;
-        const t = new Date(s.timestamp);
-        if(t < from || t >= to) continue;
-        const sign = saleSign(s);
-        for(const it of (s.items || [])){
-          if(it.productId !== productId) continue;
-          const perPack = itemDivisor(it);
-          total += sign * (Number(it.qty) || 0) / perPack;
-        }
+      for(const e of list){
+        if(e.t < from || e.t >= to) continue;
+        total += e.sign * e.qty / e.div;
       }
       weeks.push(Math.max(0, total));
     }
