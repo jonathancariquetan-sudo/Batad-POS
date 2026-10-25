@@ -6537,14 +6537,13 @@
     listenerUnsubs.push(db.collection("products").onSnapshot((snap) => {
       products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderChips();
-      renderProductGrid();
-      renderInventory();
+      renderIfActive("sell", renderProductGrid);
+      renderIfActive("inventory", renderInventory);
       renderPairingRulesUI();
       updateCostSecurityStatus();
       updateThumbStatus();
-      renderMarginReport();
-      renderStockValue();
-      renderBuyingView();
+      renderIfActive("reports", () => { renderMarginReport(); renderStockValue(); });
+      renderIfActive("buying", renderBuyingView);
     }, (err) => { console.error(err); showToast("Couldn't load products"); }));
 
     // The listahan is needed by anyone working the counter — staff charge to it
@@ -6579,6 +6578,23 @@
     listenerUnsubs = [];
   }
 
+  // v95 perf: products and sales change constantly (every sale touches both),
+  // but most of what they feed — Inventory's 549-row list, the margin report,
+  // the buying ranking, P&L/break-even, the sales dashboard — only matters on
+  // the tab showing it. Re-drawing all of that on every snapshot, regardless
+  // of which tab is open, is what made every tab feel equally slow. Instead:
+  // redraw the tab that's open now; mark the others dirty and catch them up
+  // the moment switchView() opens them.
+  let viewDirty = { sell:false, inventory:false, sales:false, buying:false, reports:false };
+  function isViewActive(view){
+    const el = $("view-" + view);
+    return !!el && el.classList.contains("active");
+  }
+  function renderIfActive(view, fn){
+    if(isViewActive(view)) fn();
+    else viewDirty[view] = true;
+  }
+
   // Sales history + the target banner are shared by the owner and managers
   // (both get the Sales dashboard) — see firestore.rules for the read grant.
   let managerListenersAttached = false;
@@ -6588,16 +6604,12 @@
 
     managerListenerUnsubs.push(db.collection("sales").orderBy("timestamp", "desc").limit(2000).onSnapshot((snap) => {
       sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if($("view-reports").classList.contains("active")) renderAdvisor();
+      renderIfActive("reports", () => { renderAdvisor(); renderMarginReport(); renderPnl(); renderBreakEven(); renderZoneEconomics(); });
       renderDayCard();
-      renderDashboard();
-      renderMarginReport();
-      renderPnl();
-      renderBreakEven();
+      renderIfActive("sales", renderDashboard);
       renderUtangList();
       renderReceivables();
-      renderZoneEconomics();
-      renderBuyingView();
+      renderIfActive("buying", renderBuyingView);
     }, (err) => { console.error(err); showToast("Couldn't load sales"); }));
 
     managerListenerUnsubs.push(db.collection("settings").doc("targets").onSnapshot((doc) => {
@@ -6627,11 +6639,14 @@
       renderStockLog();
     }, (err) => { console.error(err); }));
 
-    // The online order queue.
-    managerListenerUnsubs.push(db.collection("orders").orderBy("createdAt", "desc").onSnapshot((snap) => {
+    // The online order queue. v95 perf: this had no limit at all, so it was
+    // re-fetching the entire order history — every order ever placed — on
+    // every change, forever. 500 covers month(s) of orders at current volume;
+    // raise it if that ever runs short.
+    managerListenerUnsubs.push(db.collection("orders").orderBy("createdAt", "desc").limit(500).onSnapshot((snap) => {
       orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderOrders();
-      renderZoneEconomics();
+      renderIfActive("reports", renderZoneEconomics);
     }, (err) => { console.error(err); showToast("Couldn't load orders"); }));
   }
 
@@ -12319,9 +12334,21 @@
     $("utangFab").style.display = (view === "sell" && featureOn("utang")) ? "flex" : "none";
     $("addProductFab").style.display =
       (view === "inventory" && currentUserRole === "owner") ? "flex" : "none";
-    if(view === "sell") renderCartBar();
-    if(view === "reports") renderReportsView();
+    // v95 perf: products/sales listeners now skip the heavy per-tab redraws
+    // (renderIfActive) while a tab isn't open, so catch that tab up now.
+    if(view === "sell"){ renderCartBar(); renderProductGrid(); }
+    if(view === "inventory") renderInventory();
+    if(view === "sales") renderDashboard();
     if(view === "buying") renderBuyingView();
+    if(view === "reports"){
+      renderReportsView();
+      renderMarginReport();
+      renderPnl();
+      renderBreakEven();
+      renderStockValue();
+      renderZoneEconomics();
+    }
+    Object.keys(viewDirty).forEach(v => { viewDirty[v] = false; });
   }
 
   // ---------- Suppliers, payables and ordering ----------
@@ -15323,7 +15350,11 @@
     $("signOutBtn").onclick = () => auth.signOut();
   }
 
-  const APP_VERSION = "v94";
+  // v95 — perf: Inventory/Reports/Sales/Buying no longer redraw on every
+  // products/sales/orders change if that tab isn't the one on screen; they
+  // redraw once when you switch to them instead. The orders listener, which
+  // had no limit at all, is now capped at 500. Nothing else changed.
+  const APP_VERSION = "v95";
 
   function init(){
     applyRememberedDesign();
