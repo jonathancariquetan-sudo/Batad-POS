@@ -15484,7 +15484,12 @@
   // history for each of the products; the Inventory and Sell lists draw their
   // first rows at once and the rest in batches; Reports reuses the quarter it
   // already downloaded until a sale or stock change arrives. Same numbers.
-  const APP_VERSION = "v96";
+  // v97 — perf: the stock-cushion (demand variability) maths ran four full
+  // passes over the entire sales history for EVERY product — the main cost on
+  // Buying and Reports — and now reads each product's own sales from the index.
+  // The app no longer redraws the whole Buying tab four times at start-up, and
+  // Reports uses the sales already on the phone instead of downloading them.
+  const APP_VERSION = "v97";
 
   function init(){
     applyRememberedDesign();
