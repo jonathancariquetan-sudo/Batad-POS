@@ -76,7 +76,7 @@
   header .sync-status.offline{color:var(--danger);font-weight:700;}
   .signout-link{background:none;border:none;color:var(--text-muted);font-size:11px;font-weight:700;cursor:pointer;padding:0;font-family:inherit;}
 
-  main{flex:1;overflow-y:auto;padding-bottom:96px;}
+  main{flex:1;overflow-y:auto;padding-bottom:calc(96px + var(--badge-gap));}
   .view{display:none;padding:14px 16px 8px;}
   .view.active{display:block;}
 
@@ -280,7 +280,7 @@
   .cart-bar{
     position:fixed;
     left:0;right:0;
-    bottom:64px;
+    bottom:calc(64px + var(--badge-gap));
     background:var(--primary-dark);
     color:#fff;
     padding:12px 16px;
@@ -429,7 +429,7 @@
   .margin-readout.loss{background:var(--danger-tint);color:var(--danger);}
 
   .fab{
-    position:fixed;right:16px;bottom:80px;
+    position:fixed;right:16px;bottom:calc(80px + var(--badge-gap));
     width:52px;height:52px;border-radius:50%;
     background:var(--primary);color:#fff;border:none;
     font-size:26px;line-height:1;cursor:pointer;
@@ -538,8 +538,13 @@
   .report-download-row .actions button.csv{background:var(--primary-tint);color:var(--primary-dark);border-color:transparent;}
 
   /* Bottom nav */
+  /* v99: Netlify's "Powered by" badge floats over the bottom-right corner and
+     covers the Reports tab. --badge-gap lifts the menu clear of it; set it to
+     0px if the badge is ever switched off in Netlify. */
+  :root{--badge-gap:62px;}
+  nav.tabbar::after{content:"";position:absolute;left:0;right:0;top:100%;height:var(--badge-gap);background:var(--surface);}
   nav.tabbar{
-    position:fixed;left:0;right:0;bottom:0;
+    position:fixed;left:0;right:0;bottom:var(--badge-gap);
     background:var(--surface);border-top:1px solid var(--border);
     display:flex;z-index:30;
     padding-bottom:env(safe-area-inset-bottom,0);
@@ -1225,6 +1230,11 @@
       <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 10px;">Your product photos are sent to every customer who opens the online store. Making a small listing copy of each one cuts what they download — and what it costs them in mobile data — by several times.</p>
       <div class="biz-summary-line" id="thumbStatus">Checking…</div>
       <button class="btn btn-secondary" id="makeThumbsBtn" style="margin-top:12px;">Make listing photos smaller</button>
+    </div>
+    <div class="report-card">
+      <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 10px;">Older phones can run out of memory and crash when the app opens, because every product carries its photo twice. This removes the duplicate full-size copy from the product records. The small photo stays, so nothing changes on screen, in the online store or at the till. It first downloads a backup file, which keeps the full-size photos.</p>
+      <div class="biz-summary-line" id="slimStatus">Checking…</div>
+      <button class="btn btn-secondary" id="slimPhotosBtn" style="margin-top:12px;">Back up, then slim down product records</button>
     </div>
     <div class="report-card">
       <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 10px;">Download a full copy of your products, sales, stock history and settings. Keep it somewhere off your phone — this is what rebuilds the store if data is ever lost or tampered with.</p>
@@ -3502,8 +3512,10 @@
       if(typeof inline === "string" && inline.indexOf("data:image/") === 0) return true;
       return false;
     }
-    // Photos stored the old way, straight onto the record as data.
-    return typeof p.image === "string" && p.image.indexOf("data:image/") === 0;
+    // Photos stored the old way, straight onto the record as data. v99: the
+    // small listing copy counts too, once the full-size copy has been removed.
+    if(typeof p.image === "string" && p.image.indexOf("data:image/") === 0) return true;
+    return typeof p.thumb === "string" && p.thumb.indexOf("data:image/") === 0;
   }
 
   // "fill" used to be the only default, so a stored "fill" was never really a
@@ -6538,7 +6550,10 @@
   // phones. Point `image` at the thumb (same string, no extra memory). The
   // full copies stay untouched in the database and in backups.
   function slimProduct(p){
-    if(typeof p.image === "string" && typeof p.thumb === "string" && p.thumb && p.image !== p.thumb) p.image = p.thumb;
+    if(typeof p.image === "string" && p.image && typeof p.thumb === "string" && p.thumb){
+      p._imgStr = true;                 // the stored record still has an `image` string
+      if(p.image !== p.thumb) p.image = p.thumb;
+    }
     return p;
   }
 
@@ -6552,6 +6567,7 @@
       renderPairingRulesUI();
       updateCostSecurityStatus();
       updateThumbStatus();
+      updateSlimStatus();
       renderIfActive("reports", () => { renderMarginReport(); renderStockValue(); });
       renderIfActive("buying", renderBuyingView);
     }, (err) => { console.error(err); showToast("Couldn't load products"); }));
@@ -8322,7 +8338,7 @@
       <button type="button" class="btn btn-secondary photo-hit" data-pid="${escapeHtml(p.id)}"
         style="width:100%;text-align:left;margin-bottom:6px;font-size:13px;padding:9px 10px;">
         ${escapeHtml(p.name)}
-        <span style="display:block;font-size:11px;color:var(--text-muted);">${escapeHtml(p.sku || "no code")}${claimed[p.id] ? " · another file already has this one" : ""}${p.image ? " · already has a photo" : ""}</span>
+        <span style="display:block;font-size:11px;color:var(--text-muted);">${escapeHtml(p.sku || "no code")}${claimed[p.id] ? " · another file already has this one" : ""}${(p.image || p.thumb) ? " · already has a photo" : ""}</span>
       </button>`).join("");
     Array.prototype.forEach.call(box.querySelectorAll(".photo-hit"), b => {
       b.onclick = () => assignPhotoTo(b.getAttribute("data-pid"));
@@ -8376,7 +8392,7 @@
       if(x.skip){ right = "left out"; colour = "color:var(--text-muted);"; }
       else if(!x.product){ right = "not placed"; colour = "color:var(--danger);"; }
       else if(clash[x.product.id]){ right = x.product.name + " — claimed twice"; colour = "color:var(--danger);"; }
-      else { right = x.product.name + (x.product.image ? " — replaces its photo" : ""); }
+      else { right = x.product.name + ((x.product.image || x.product.thumb) ? " — replaces its photo" : ""); }
       html += `<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;">
         <span style="min-width:0;overflow-wrap:anywhere;">${escapeHtml(x.file.name)}</span>
         <span style="text-align:right;min-width:0;${colour}">${escapeHtml(right)}
@@ -11302,7 +11318,7 @@
     // is not a photo, and counting one is how a shop comes to believe it has
     // pictures it does not have.
     const withPhoto = products.filter(hasStoredPhoto);
-    const claimed = products.filter(p => p.image || p.imageFile).length;
+    const claimed = products.filter(p => p.image || p.thumb || p.imageFile).length;
     const hollow = claimed - withPhoto.length;
     const missing = withPhoto.filter(p => !photoDisplaySrc(p)).length;
     if(withPhoto.length === 0){
@@ -11351,6 +11367,7 @@
     btn.disabled = true;
     const originalLabel = btn.textContent;
     btn.textContent = "Preparing…";
+    let ok = false;
     try{
       const readAll = async (name) => {
         const snap = await db.collection(name).get();
@@ -11392,12 +11409,52 @@
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 2000);
       showToast("Backup downloaded");
+      ok = true;
     }catch(err){
       console.error(err);
       showToast("Couldn't build the backup");
     }
     btn.disabled = false;
     btn.textContent = originalLabel;
+    return ok;
+  }
+
+  // ---------- Slim down product records (v99) ----------
+  function slimCandidates(){ return products.filter(p => p._imgStr); }
+  function updateSlimStatus(){
+    const el = $("slimStatus"), btn = $("slimPhotosBtn");
+    if(!el) return;
+    const n = slimCandidates().length;
+    el.textContent = n
+      ? n + " product" + (n === 1 ? " still carries" : "s still carry") + " a duplicate full-size photo copy."
+      : "Done: no product carries a duplicate photo copy.";
+    if(btn) btn.disabled = n === 0;
+  }
+  async function slimProductRecords(){
+    const list = slimCandidates();
+    if(!list.length){ showToast("Nothing to slim down"); return; }
+    if(!confirm("Step 1: a backup file will download now (it keeps the full-size photos).\n\nStep 2: after you confirm, the duplicate full-size photo copy is removed from " + list.length + " products.\n\nKeep the backup file safe. Continue?")) return;
+    const btn = $("slimPhotosBtn");
+    btn.disabled = true;
+    try{
+      const backedUp = await downloadBackup();
+      if(!backedUp){ showToast("Backup failed — nothing was changed"); btn.disabled = false; return; }
+      if(!confirm("Did the backup file finish downloading and is it saved on your phone?\n\nOK = yes, go ahead and slim down the records.\nCancel = stop, nothing is changed.")){ btn.disabled = false; return; }
+      let done = 0;
+      for(let i = 0; i < list.length; i += 100){
+        const batch = db.batch();
+        list.slice(i, i + 100).forEach(p => batch.update(db.collection("products").doc(p.id), { image: firebase.firestore.FieldValue.delete() }));
+        await batch.commit();
+        done += Math.min(100, list.length - i);
+        btn.textContent = "Slimming… " + done + " / " + list.length;
+      }
+      showToast("Done — " + done + " products slimmed down");
+    }catch(err){
+      console.error(err);
+      showToast("Couldn't finish — nothing more was changed");
+    }
+    btn.textContent = "Back up, then slim down product records";
+    updateSlimStatus();
   }
 
   // ---------- Online orders ----------
@@ -15261,6 +15318,7 @@
     $("marginSortSelect").onchange = (e) => { marginSort = e.target.value; renderMarginReport(); };
     $("secureCostsBtn").onclick = migrateCostsToPrivate;
     $("makeThumbsBtn").onclick = makeListingThumbs;
+    $("slimPhotosBtn").onclick = slimProductRecords;
     $("downloadBackupBtn").onclick = downloadBackup;
     $("editFullProductBtn").onclick = () => { closeSheet("stockAdjustSheet"); openProductForm(adjustingProductId); };
     $("overlay").onclick = closeAllSheets;
@@ -15499,7 +15557,7 @@
   // Buying and Reports — and now reads each product's own sales from the index.
   // The app no longer redraws the whole Buying tab four times at start-up, and
   // Reports uses the sales already on the phone instead of downloading them.
-  const APP_VERSION = "v98";
+  const APP_VERSION = "v99";
 
   function init(){
     applyRememberedDesign();
