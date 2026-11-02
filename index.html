@@ -541,7 +541,7 @@
   /* v99: Netlify's "Powered by" badge floats over the bottom-right corner and
      covers the Reports tab. --badge-gap lifts the menu clear of it; set it to
      0px if the badge is ever switched off in Netlify. */
-  :root{--badge-gap:62px;}
+  :root{--badge-gap:0px;}
   nav.tabbar::after{content:"";position:absolute;left:0;right:0;top:100%;height:var(--badge-gap);background:var(--surface);}
   nav.tabbar{
     position:fixed;left:0;right:0;bottom:var(--badge-gap);
@@ -15557,7 +15557,7 @@
   // Buying and Reports — and now reads each product's own sales from the index.
   // The app no longer redraws the whole Buying tab four times at start-up, and
   // Reports uses the sales already on the phone instead of downloading them.
-  const APP_VERSION = "v99";
+  const APP_VERSION = "v100";
 
   function init(){
     applyRememberedDesign();
