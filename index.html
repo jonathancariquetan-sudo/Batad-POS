@@ -6474,6 +6474,11 @@
     // before, and the app says so rather than failing at the last step.
     try{ storage = firebase.storage ? firebase.storage() : null; }
     catch(e){ storage = null; console.warn("Storage not available", e); }
+    // v103: the phone keeps a local copy of the shop's data so reopening the
+    // app costs almost no reads. The default copy is capped at 40 MB; the shop's
+    // data is bigger than that, so the old copy was thrown away and every open
+    // re-read everything (thousands of reads, billed against the free daily limit).
+    try{ db.settings({ cacheSizeBytes: 150 * 1024 * 1024, merge: true }); }catch(e){ console.warn("cache size not set", e); }
     db.enablePersistence({ synchronizeTabs: true }).catch(() => { /* multiple tabs open, or unsupported browser — app still works, just without offline cache */ });
     auth.onAuthStateChanged(handleAuthChange);
 
@@ -6549,6 +6554,16 @@
   // so keeping the full copy in memory only cost ~40 MB and crashed older
   // phones. Point `image` at the thumb (same string, no extra memory). The
   // full copies stay untouched in the database and in backups.
+  // v102: the first snapshot can be an EMPTY copy from the phone's own cache
+  // while the real list is still downloading. Showing "No products yet" then
+  // looks like the shop's data is gone. Wait for the server (up to 60 s).
+  let productsFromServer = false;
+  const productsWaitStart = Date.now();
+  function productsStillLoading(){
+    return products.length === 0 && !productsFromServer && (Date.now() - productsWaitStart) < 60000;
+  }
+  setTimeout(() => { try{ if(typeof renderProductGrid === "function") renderProductGrid(); if(typeof renderInventory === "function") renderInventory(); }catch(e){} }, 61000);
+
   function slimProduct(p){
     if(typeof p.image === "string" && p.image && typeof p.thumb === "string" && p.thumb){
       p._imgStr = true;                 // the stored record still has an `image` string
@@ -6561,6 +6576,7 @@
     detachListeners();
     listenerUnsubs.push(db.collection("products").onSnapshot((snap) => {
       products = snap.docs.map(d => slimProduct({ id: d.id, ...d.data() }));
+      if(!snap.metadata.fromCache || snap.size > 0) productsFromServer = true;
       renderChips();
       renderIfActive("sell", renderProductGrid);
       renderIfActive("inventory", renderInventory);
@@ -7030,6 +7046,13 @@
       return matchesCat && matchesQ;
     });
 
+    if(productsStillLoading()){
+      $("loadingSell").textContent = "Loading products… the first load can take a minute on mobile data.";
+      $("loadingSell").style.display = "";
+      grid.style.display = "none";
+      $("emptySell").style.display = "none";
+      return;
+    }
     $("loadingSell").style.display = "none";
     if(products.length === 0){
       grid.style.display = "none";
@@ -7667,6 +7690,13 @@
     const q = ($("invSearchInput").value || "").trim().toLowerCase();
     const list = products.filter(p => !q || matchesProductName(p, q));
 
+    if(productsStillLoading()){
+      $("loadingInv").textContent = "Loading products… the first load can take a minute on mobile data.";
+      $("loadingInv").style.display = "";
+      wrap.style.display = "none";
+      $("emptyInv").style.display = "none";
+      return;
+    }
     $("loadingInv").style.display = "none";
     if(products.length === 0){
       wrap.style.display = "none";
@@ -15571,7 +15601,7 @@
   // Buying and Reports — and now reads each product's own sales from the index.
   // The app no longer redraws the whole Buying tab four times at start-up, and
   // Reports uses the sales already on the phone instead of downloading them.
-  const APP_VERSION = "v101";
+  const APP_VERSION = "v103";
 
   function init(){
     applyRememberedDesign();
